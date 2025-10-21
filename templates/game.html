@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="stage stage-800x480">
+    <div class="layout layout-2-8">
+      <aside class="menu" aria-label="메뉴 정보">
+        <div class="menu-panel">
+          <div class="menu-team" id="menu-away">
+            <div class="menu-team-row">
+              <span class="menu-team-name" id="name-away">AWAY</span>
+              <span class="menu-team-runs" id="runs-away">0</span>
+            </div>
+            <div class="menu-team-meta">H <span id="hits-away">0</span> · E <span id="errors-away">0</span></div>
+          </div>
+          <div class="menu-team" id="menu-home">
+            <div class="menu-team-row">
+              <span class="menu-team-name" id="name-home">HOME</span>
+              <span class="menu-team-runs" id="runs-home">0</span>
+            </div>
+            <div class="menu-team-meta">H <span id="hits-home">0</span> · E <span id="errors-home">0</span></div>
+          </div>
+
+          <div class="menu-inning">
+            <span id="half-indicator" class="half half-top" title="초/말">▲</span>
+            <div class="menu-inning-number">
+              <span id="inning-number">1</span>
+              <span class="menu-inning-label">이닝</span>
+            </div>
+          </div>
+
+          <div class="menu-count">
+            <div class="light-group" aria-label="볼">
+              <span class="label">B</span>
+              <span class="dot" id="ball-1"></span>
+              <span class="dot" id="ball-2"></span>
+              <span class="dot" id="ball-3"></span>
+            </div>
+            <div class="light-group" aria-label="스트라이크">
+              <span class="label">S</span>
+              <span class="dot" id="strike-1"></span>
+              <span class="dot" id="strike-2"></span>
+            </div>
+            <div class="light-group" aria-label="아웃">
+              <span class="label">O</span>
+              <span class="dot" id="out-1"></span>
+              <span class="dot" id="out-2"></span>
+              <span class="dot" id="out-3"></span>
+            </div>
+          </div>
+
+          <div class="menu-last-play" id="last-play-text">경기 시작</div>
+        </div>
+      </aside>
+
+      <section class="field-wrap" aria-label="경기장 화면">
+        <section class="field" aria-label="야구장">
+          <div class="field-inner" style="--mound-x: 50%; --mound-y: 52%; --home-x: 50%; --home-y: 70%;">
+            <div class="diamond"></div>
+            <div class="base base-1" id="base-1"></div>
+            <div class="base base-2" id="base-2"></div>
+            <div class="base base-3" id="base-3"></div>
+            <div class="home-plate"></div>
+            <div class="mound"></div>
+
+            <!-- 수비수 위치 -->
+            <div class="fielder fielder-p" id="fielder-p">
+              <div class="fielder-name" id="fielder-name-p"></div>
+            </div>
+            <div class="fielder fielder-c" id="fielder-c">
+              <div class="fielder-name" id="fielder-name-c"></div>
+            </div>
+            <div class="fielder fielder-1b" id="fielder-1b">
+              <div class="fielder-name" id="fielder-name-1b"></div>
+            </div>
+            <div class="fielder fielder-2b" id="fielder-2b">
+              <div class="fielder-name" id="fielder-name-2b"></div>
+            </div>
+            <div class="fielder fielder-3b" id="fielder-3b">
+              <div class="fielder-name" id="fielder-name-3b"></div>
+            </div>
+            <div class="fielder fielder-ss" id="fielder-ss">
+              <div class="fielder-name" id="fielder-name-ss"></div>
+            </div>
+            <div class="fielder fielder-lf" id="fielder-lf">
+              <div class="fielder-name" id="fielder-name-lf"></div>
+            </div>
+            <div class="fielder fielder-cf" id="fielder-cf">
+              <div class="fielder-name" id="fielder-name-cf"></div>
+            </div>
+            <div class="fielder fielder-rf" id="fielder-rf">
+              <div class="fielder-name" id="fielder-name-rf"></div>
+            </div>
+
+            <div class="ball" id="ball" aria-hidden="true"></div>
+
+            <svg class="basepaths" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <polyline points="50,30 70,50 50,70 30,50 50,30" class="path"></polyline>
+            </svg>
+            <!-- 보이스 버튼: basepaths 좌상단 고정 -->
+            <button class="voice-btn" id="voice-btn" title="음성 대화">
+              🎤
+            </button>
+          </div>
+        </section>
+      </section>
+    </div>
+    
+    <!-- 중앙 팝업 -->
+    <div class="popup-overlay" id="popup-overlay">
+      <div class="popup-content" id="popup-content"></div>
+    </div>
+  </div>
+{% endblock %}

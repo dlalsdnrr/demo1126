@@ -1,0 +1,282 @@
+:root {
+  --bg: #2a3441;
+  --panel: #3a4651;
+  --text: #ffffff;
+  --muted: #b8c5d6;
+  --accent: #00d2ff;
+  --green: #1db954;
+  --yellow: #ffd166;
+  --red: #ef476f;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: 'Pretendard', system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', sans-serif;
+  background: radial-gradient(1200px 800px at 70% -20%, #4a5568 0%, var(--bg) 60%);
+  color: var(--text);
+}
+
+.container { width: min(1100px, 100vw); margin: 0 auto; }
+
+.app-header { display: none; }
+
+/* 스코어보드 */
+.stage.stage-800x480 { width: 800px; height: 480px; margin: 0 auto; display: flex; flex-direction: column; position: relative; }
+.layout.layout-2-8 { display: grid; grid-template-columns: 160px 1fr; gap: 8px; width: 100%; height: 100%; }
+.layout.layout-2-8 .menu { width: 160px; overflow: hidden; }
+.layout.layout-2-8 .field-wrap { width: 100%; }
+.stage.stage-800x480 .control { display: none; }
+.stage.stage-800x480 .scoreboard { margin: 8px 0; padding: 10px; }
+.menu-panel { height: 100%; background: var(--panel); border: 1px solid #5a6570; border-radius: 10px; padding: 10px; display: grid; grid-template-rows: auto auto auto 1fr; gap: 10px; }
+.menu-team { background: #4a5568; border: 1px solid #5a6570; border-radius: 8px; padding: 8px; }
+.menu-team-row { display: flex; align-items: baseline; justify-content: space-between; }
+.menu-team-name { font-weight: 700; font-size: 16px; }
+.menu-team-runs { font-weight: 800; font-size: 22px; color: var(--accent); }
+.menu-team-meta { margin-top: 4px; color: var(--muted); font-size: 12px; }
+.menu-inning { display: flex; align-items: center; gap: 8px; background: #4a5568; border: 1px solid #5a6570; border-radius: 8px; padding: 8px; }
+.menu-inning-number { display: flex; align-items: baseline; gap: 6px; font-weight: 700; }
+.menu-inning-number #inning-number { font-size: 18px; }
+.menu-inning-label { color: var(--muted); font-size: 12px; }
+.menu-count { display: grid; gap: 6px; background: #39404b; border: 1px solid #5a6570; border-radius: 8px; padding: 8px; }
+.menu-last-play { color: var(--muted); font-size: 12px; align-self: center; }
+.stage.stage-800x480 .scoreboard .team .name { font-size: 16px; }
+.stage.stage-800x480 .scoreboard .team .runs { font-size: 22px; }
+.stage.stage-800x480 .scoreboard .meta { font-size: 12px; }
+.stage.stage-800x480 .scoreboard .status { grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 8px; padding-top: 8px; }
+.stage.stage-800x480 .half { width: 18px; height: 18px; line-height: 18px; margin-right: 6px; }
+.stage.stage-800x480 .light-group { padding: 4px 6px; gap: 4px; }
+.stage.stage-800x480 .light-group .label { font-size: 11px; width: 12px; }
+.stage.stage-800x480 .dot { width: 8px; height: 8px; }
+
+.stage.stage-800x480 .field-inner { height: 300px; }
+.stage.stage-800x480 .diamond { width: 320px; height: 320px; }
+.stage.stage-800x480 .base { width: 18px; height: 18px; }
+.stage.stage-800x480 .home-plate { width: 24px; height: 24px; }
+.stage.stage-800x480 .mound { width: 40px; height: 18px; }
+.stage.stage-800x480 .base.occupied::after { font-size: 24px; }
+.control { margin: 16px 0 8px; }
+.game-form { display: flex; gap: 8px; align-items: center; }
+.game-form label { color: var(--muted); font-size: 14px; }
+.game-form input { background: #0f1729; color: var(--text); border: 1px solid #1e2b4d; border-radius: 8px; padding: 8px 10px; outline: none; }
+.game-form button { background: linear-gradient(180deg, #1f7dd8, #165aa1); color: white; padding: 8px 12px; border: 0; border-radius: 8px; cursor: pointer; }
+.game-form button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.scoreboard { margin: 20px 0; padding: 16px; background: var(--panel); border: 1px solid #223154; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+.scoreboard .teams { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.scoreboard .team { display: grid; grid-template-columns: 1fr auto; align-items: center; background: #0f1729; padding: 12px 14px; border-radius: 10px; border: 1px solid #1e2b4d; }
+.scoreboard .team .name { font-weight: 700; font-size: 18px; }
+.scoreboard .team .runs { font-weight: 700; font-size: 26px; color: var(--accent); }
+.scoreboard .team .meta { grid-column: 1 / -1; color: var(--muted); font-size: 13px; margin-top: 4px; }
+.scoreboard .status { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; gap: 16px; margin-top: 14px; padding-top: 12px; border-top: 1px dashed #2a3961; }
+.scoreboard .inning { font-weight: 600; color: var(--muted); }
+.half { display: inline-block; width: 22px; height: 22px; text-align: center; line-height: 22px; border-radius: 6px; margin-right: 8px; background: #10203a; border: 1px solid #25406e; color: #8fc7ff; }
+.half-bottom { transform: rotate(180deg); }
+
+.lights { display: flex; align-items: center; gap: 10px; justify-content: center; }
+.light-group { display: flex; align-items: center; gap: 6px; background: #262d39; padding: 6px 8px; border-radius: 999px; border: 1px solid #5a6570; }
+.light-group .label { width: 14px; font-size: 12px; color: var(--muted); text-align: right; margin-right: 2px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: #5a6570; border: 1px solid #6a7580; box-shadow: inset 0 0 8px rgba(0,0,0,0.3); opacity: 0.7; }
+.dot.on { background: #8be9fd; border-color: #35c7ff; box-shadow: 0 0 12px rgba(53,199,255,0.8), inset 0 0 6px rgba(255,255,255,0.6); opacity: 1; }
+.light-group[aria-label="아웃"] .dot.on { background: #ff7b94; border-color: #ff3f68; box-shadow: 0 0 12px rgba(255,90,126,0.85), inset 0 0 6px rgba(255,255,255,0.6); }
+
+.last-play { text-align: right; color: var(--muted); font-size: 14px; }
+
+/* 야구장 */
+.field { position: relative; background: linear-gradient(180deg, #0d1b2a 0%, #0a1422 100%); border: 1px solid #1b2b4a; border-radius: 14px; box-shadow: inset 0 10px 40px rgba(0,0,0,0.35); }
+.field-inner { position: relative; height: 64vh; min-height: 480px; background: radial-gradient(600px 300px at 50% 10%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 70%); overflow: hidden; border-radius: 12px; }
+.diamond { position: absolute; left: 50%; top: 50%; width: 40vmin; height: 40vmin; transform: translate(-50%, -50%) rotate(45deg); background: #1a6a2a; border: 6px solid #e6d5a0; box-shadow: inset 0 0 30px rgba(0,0,0,0.45), 0 12px 30px rgba(0,0,0,0.35); }
+.base { position: absolute; width: 22px; height: 22px; background: #f6f1dd; border: 2px solid #d8caa2; transform: translate(-50%, -50%) rotate(45deg); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.home-plate { position: absolute; left: 50%; top: 95%; width: 28px; height: 28px; background: #f6f1dd; border: 2px solid #d8caa2; transform: translate(-50%, -50%); clip-path: polygon(50% 100%, 0 62%, 0 0, 100% 0, 100% 62%); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.mound { position: absolute; left: 50%; top: 65%; width: 46px; height: 20px; transform: translate(-50%, -50%); background: #815c34; border-radius: 50%; box-shadow: inset 0 4px 10px rgba(0,0,0,0.35); border: 2px solid rgba(0,0,0,0.2); }
+
+/* 베이스 위치 */
+.base-1 { left: 70%; top: 65%; }
+.base-2 { left: 50%; top: 40%; }
+.base-3 { left: 30%; top: 65%; }
+
+.base.occupied { animation: baseGlow 1.1s ease-in-out infinite alternate; }
+/* 점유 시 주자 이모지 표시 */
+.base.occupied::before { content: none; }
+.base.occupied::after {
+  content: "🏃‍♂️";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  pointer-events: none;
+  font-size: 40px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+  text-shadow: 0 0 6px rgba(0, 210, 255, 0.6);
+}
+@keyframes baseGlow {
+  from { box-shadow: 0 0 0 rgba(0,0,0,0.0), 0 0 0 rgba(0,0,0,0.0); filter: drop-shadow(0 0 0px rgba(0, 210, 255, 0)); }
+  to { box-shadow: 0 4px 12px rgba(0,0,0,0.3); filter: drop-shadow(0 0 12px rgba(0, 210, 255, 0.9)); }
+}
+
+/* 베이스 경로 시각효과 */
+.basepaths { position: absolute; inset: 0; opacity: 0.18; }
+.basepaths .path { fill: none; stroke: #e6d5a0; stroke-width: 1.2; }
+
+.voice-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 900;
+  width: auto;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: #4a5568;
+  border: 1px solid #5a6570;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+}
+
+.voice-btn.active {
+  background: linear-gradient(180deg, #1f7dd8, #165aa1);
+  border-color: #2b6cb0;
+  box-shadow: 0 6px 20px rgba(31,125,216,0.5);
+}
+
+/* 공 애니메이션 */
+.ball { position: absolute; width: 12px; height: 12px; background: radial-gradient(circle at 35% 35%, #fff 0%, #f7f7f7 45%, #e5e5e5 100%); border-radius: 50%; left: calc(var(--mound-x) - 6px); top: calc(var(--mound-y) - 6px); opacity: 0; pointer-events: none; box-shadow: 0 4px 14px rgba(255,255,255,0.55); }
+.ball.pitching { animation: pitchToHome 0.85s cubic-bezier(.2,.7,.2,1) forwards; opacity: 1; }
+
+@keyframes pitchToHome {
+  0% {
+    left: calc(var(--mound-x) - 6px);
+    top: calc(var(--mound-y) - 6px);
+    transform: scale(1);
+    filter: blur(0.2px);
+  }
+  85% {
+    transform: scale(0.9);
+    filter: blur(0.4px);
+  }
+  100% {
+    left: calc(var(--home-x) - 6px);
+    top: calc(var(--home-y) - 6px);
+    transform: scale(0.85);
+    filter: blur(0.6px);
+  }
+}
+
+/* 수비수 */
+.fielder {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: radial-gradient(circle at 40% 40%, #ffffff 0%, #d4eaff 100%);
+  border: 1px solid #a0c3e0;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.fielder.occupied {
+  opacity: 1;
+}
+
+/* 수비수 위치 지정 - 아래로 조정 */
+.fielder-p { top: 65%; left: 50%; } /* 투수 */
+.fielder-c { top: 95%; left: 50%; } /* 포수 */
+.fielder-1b { top: 65%; left: 70%; } /* 1루수 */
+.fielder-2b { top: 40%; left: 50%; } /* 2루수 */
+.fielder-ss { top: 43%; left: 40%; } /* 유격수 */
+.fielder-3b { top: 65%; left: 30%; } /* 3루수 */
+.fielder-lf { top: 45%; left: 30%; } /* 좌익수 */
+.fielder-cf { top: 25%; left: 50%; } /* 중견수 */
+.fielder-rf { top: 45%; left: 70%; } /* 우익수 */
+
+/* 수비수 이름 */
+.fielder-name {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 2px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* 포수 이름은 위에 표시 */
+.fielder-c .fielder-name {
+  top: -20px;
+}
+
+/* 중앙 팝업 */
+.popup-overlay {
+  position: absolute; /* fixed 대신 absolute로 변경 */
+  top: 50%; /* 중앙 */
+  left: 60%; /* 우측 65% */
+  width: auto;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  transform: translate(-50%, -50%); /* 정확한 중앙 정렬 */
+}
+
+.popup-overlay.show {
+  opacity: 1;
+}
+
+.popup-content {
+  background: rgba(0, 0, 0, 0.8);
+  color: #ffffff;
+  padding: 15px 25px;
+  border-radius: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  border: 2px solid var(--accent);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  transform: scale(0.8);
+  transition: transform 0.3s ease;
+}
+
+.popup-overlay.show .popup-content {
+  transform: scale(1);
+}
+
+/* 반응형 */
+@media (max-width: 640px) {
+  .scoreboard .team .runs { font-size: 22px; }
+  .diamond { width: 64vmin; height: 64vmin; }
+}
+
+/* Topbar */
+.topbar { position: fixed; top: 0; right: 0; left: 0; height: 40px; display: flex; justify-content: flex-end; align-items: center; padding: 0 8px; z-index: 1200; pointer-events: none; }
+.topbar-right { pointer-events: all; }
+.serial-btn { background: #4a5568; border: 1px solid #5a6570; color: #fff; border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+
+/* Serial panel */
+.serial-panel { position: fixed; top: 48px; right: 8px; width: 480px; max-height: calc(100vh - 64px); overflow: auto; background: var(--panel); border: 1px solid #5a6570; border-radius: 10px; padding: 10px; z-index: 1200; display: none; }
+.serial-panel.open { display: block; }
+.serial-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.serial-panel-header button { background: transparent; color: var(--text); border: 0; cursor: pointer; font-size: 16px; }
+.serial-panel-body { display: grid; gap: 10px; }
+.serial-status { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.serial-actions label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.serial-actions input, .serial-actions select { background: #4a5568; color: #fff; border: 1px solid #5a6570; border-radius: 6px; padding: 6px 8px; }
+.btn-row { display: grid; padding-top: 5px; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.btn-row button, .serial-send button { background: #4a5568; border: 1px solid #5a6570; color: #fff; border-radius: 6px; padding: 8px 10px; cursor: pointer; }
+.serial-send { display: grid; grid-template-columns: 110px 110px auto; gap: 8px; align-items: end; }
+.serial-send input { width: 100%; }

@@ -1,0 +1,888 @@
+{
+  "macros": {
+    "김지찬 응원가": [
+      {
+        "motor_id": "R1",
+        "position": 2048,
+        "speed": 100,
+        "delay_ms": 1000
+      },
+      {
+        "motor_id": "RE",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 1000
+      },
+      {
+        "motor_id": "R2",
+        "position": 1024,
+        "speed": 100,
+        "delay_ms": 1000
+      },
+      {
+        "motor_id": "R2",
+        "position": 2500,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R1",
+        "position": 3300,
+        "speed": 100,
+        "delay_ms": 1000
+      },
+      {
+        "motor_id": "R1",
+        "position": 2200,
+        "speed": 100,
+        "delay_ms": 1000
+      },
+      {
+        "motor_id": "R2",
+        "position": 1500,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R1",
+        "position": 3300,
+        "speed": 100,
+        "delay_ms": 1000
+      },
+      {
+        "motor_id": "R1",
+        "position": 2200,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2500,
+        "speed": 100,
+        "delay_ms": 1000
+      },
+      {
+        "motor_id": "R2",
+        "position": 2500,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R1",
+        "position": 3300,
+        "speed": 100,
+        "delay_ms": 1000
+      },
+      {
+        "motor_id": "R1",
+        "position": 2200,
+        "speed": 100,
+        "delay_ms": 1000
+      },
+      {
+        "motor_id": "RE",
+        "position": 1800,
+        "speed": 200,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 1600,
+        "speed": 200,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R1",
+        "position": 3300,
+        "speed": 200,
+        "delay_ms": 200
+      },
+      {
+        "motor_id": "R1",
+        "position": 2500,
+        "speed": 200,
+        "delay_ms": 200
+      },
+      {
+        "motor_id": "R1",
+        "position": 3300,
+        "speed": 200,
+        "delay_ms": 200
+      },
+      {
+        "motor_id": "R1",
+        "position": 2500,
+        "speed": 200,
+        "delay_ms": 200
+      },
+      {
+        "motor_id": "R1",
+        "position": 3300,
+        "speed": 200,
+        "delay_ms": 200
+      },
+      {
+        "motor_id": "R1",
+        "position": 2048,
+        "speed": 200,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "RE",
+        "position": 1800,
+        "speed": 200,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2600,
+        "speed": 200,
+        "delay_ms": 1000
+      }
+    ],
+    "홈런": [
+      {
+        "motor_id": "R1",
+        "position": 2048,
+        "speed": 100,
+        "delay_ms": 100
+      },
+      {
+        "motor_id": "R2",
+        "position": 1024,
+        "speed": 100,
+        "delay_ms": 100
+      },
+      {
+        "motor_id": "RE",
+        "position": 2048,
+        "speed": 100,
+        "delay_ms": 100
+      },
+      {
+        "motor_id": "R1",
+        "position": 1700,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 1500,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 1400,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2024,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 1700,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2500,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2048,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 3000,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2400,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2500,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2800,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2024,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2400,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 1500,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 1024,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 1700,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 1500,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 1400,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2024,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 1700,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2500,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2048,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 3000,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2400,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2500,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2800,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2024,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2400,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 1500,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 1024,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 1700,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 1500,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 1400,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2024,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 1700,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2500,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2048,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 3000,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2400,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2500,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2800,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2024,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2400,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 1500,
+        "speed": 150,
+        "delay_ms": 170
+      },
+      {
+        "motor_id": "R1",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 1024,
+        "speed": 150,
+        "delay_ms": 170
+      }
+    ],
+    "아웃": [
+      {
+        "motor_id": 123,
+        "position": 123,
+        "speed": 123,
+        "delay_ms": 200123
+      }
+    ],
+    "삼진아웃": [
+      {
+        "motor_id": 123,
+        "position": 123,
+        "speed": 123,
+        "delay_ms": 200123
+      }
+    ],
+    "스트라이크": [
+      {
+        "motor_id": 123,
+        "position": 123,
+        "speed": 123,
+        "delay_ms": 200123
+      }
+    ],
+    "볼": [
+      {
+        "motor_id": 123,
+        "position": 123,
+        "speed": 123,
+        "delay_ms": 200123
+      }
+    ],
+    "볼넷": [
+      {
+        "motor_id": 123,
+        "position": 123,
+        "speed": 123,
+        "delay_ms": 200123
+      }
+    ],
+    "도루": [
+      {
+        "motor_id": 123,
+        "position": 123,
+        "speed": 123,
+        "delay_ms": 200123
+      }
+    ],
+    "1루타": [
+      {
+        "motor_id": "R1",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 1024,
+        "speed": 150,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "RE",
+        "position": 2048,
+        "speed": 150,
+        "delay_ms": 1000
+      },
+      {
+        "motor_id": "RE",
+        "position": 1500,
+        "speed": 150,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 3060,
+        "speed": 150,
+        "delay_ms": 600
+      },
+      {
+        "motor_id": "R2",
+        "position": 2048,
+        "speed": 150,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "RE",
+        "position": 2048,
+        "speed": 150,
+        "delay_ms": 250
+      },
+      {
+        "motor_id": "R2",
+        "position": 3060,
+        "speed": 150,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "RE",
+        "position": 1500,
+        "speed": 150,
+        "delay_ms": 300
+      },
+      {
+        "motor_id": "R2",
+        "position": 2048,
+        "speed": 150,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "RE",
+        "position": 2048,
+        "speed": 150,
+        "delay_ms": 250
+      },
+      {
+        "motor_id": "R2",
+        "position": 3060,
+        "speed": 150,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "RE",
+        "position": 1500,
+        "speed": 150,
+        "delay_ms": 300
+      },
+      {
+        "motor_id": "R2",
+        "position": 2048,
+        "speed": 150,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "RE",
+        "position": 2048,
+        "speed": 150,
+        "delay_ms": 250
+      }
+    ],
+    "2루타": [
+      {
+        "motor_id": 123,
+        "position": 123,
+        "speed": 123,
+        "delay_ms": 200123
+      }
+    ],
+    "3루타": [
+      {
+        "motor_id": 123,
+        "position": 123,
+        "speed": 123,
+        "delay_ms": 200123
+      }
+    ],
+    "아웃(삐끼삐끼)": [
+      {
+        "motor_id": "R1",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 1024,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "RE",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 1000
+      },
+      {
+        "motor_id": "L1",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "L2",
+        "position": 1024,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "LE",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 500
+      },
+      {
+        "motor_id": "R1",
+        "position": 3000,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "RE",
+        "position": 1000,
+        "speed": 100,
+        "delay_ms": 1000
+      },
+      {
+        "motor_id": "R2",
+        "position": 1024,
+        "speed": 100,
+        "delay_ms": 500
+      },
+      {
+        "motor_id": "R2",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 500
+      },
+      {
+        "motor_id": "R2",
+        "position": 1024,
+        "speed": 100,
+        "delay_ms": 500
+      },
+      {
+        "motor_id": "L1",
+        "position": 1024,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "L2",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "LE",
+        "position": 1024,
+        "speed": 100,
+        "delay_ms": 500
+      },
+      {
+        "motor_id": "L2",
+        "position": 1000,
+        "speed": 100,
+        "delay_ms": 500
+      },
+      {
+        "motor_id": "L2",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 500
+      },
+      {
+        "motor_id": "L2",
+        "position": 1000,
+        "speed": 100,
+        "delay_ms": 500
+      },
+      {
+        "motor_id": "R2",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 500
+      },
+      {
+        "motor_id": "R2",
+        "position": 1024,
+        "speed": 100,
+        "delay_ms": 500
+      },
+      {
+        "motor_id": "R2",
+        "position": 2024,
+        "speed": 100,
+        "delay_ms": 500
+      },
+      {
+        "motor_id": "R2",
+        "position": 1024,
+        "speed": 100,
+        "delay_ms": 500
+      },
+      {
+        "motor_id": "R2",
+        "position": 1500,
+        "speed": 200,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "L2",
+        "position": 1500,
+        "speed": 200,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "RE",
+        "position": 1500,
+        "speed": 200,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "LE",
+        "position": 1500,
+        "speed": 200,
+        "delay_ms": 250
+      },
+      {
+        "motor_id": "R1",
+        "position": 2500,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "L1",
+        "position": 1500,
+        "speed": 100,
+        "delay_ms": 250
+      },
+      {
+        "motor_id": "R1",
+        "position": 3000,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "L1",
+        "position": 1000,
+        "speed": 100,
+        "delay_ms": 250
+      },
+      {
+        "motor_id": "R1",
+        "position": 2500,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "L1",
+        "position": 1500,
+        "speed": 100,
+        "delay_ms": 250
+      },
+      {
+        "motor_id": "R1",
+        "position": 3000,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "L1",
+        "position": 1000,
+        "speed": 100,
+        "delay_ms": 250
+      },
+      {
+        "motor_id": "R1",
+        "position": 2500,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "L1",
+        "position": 1500,
+        "speed": 100,
+        "delay_ms": 250
+      },
+      {
+        "motor_id": "R1",
+        "position": 3000,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "L1",
+        "position": 1000,
+        "speed": 100,
+        "delay_ms": 250
+      },
+      {
+        "motor_id": "R1",
+        "position": 2500,
+        "speed": 100,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "L1",
+        "position": 1500,
+        "speed": 100,
+        "delay_ms": 250
+      }
+    ],
+    "차렷자세": [
+      {
+        "motor_id": "R1",
+        "position": 2048,
+        "speed": 50,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "R2",
+        "position": 1024,
+        "speed": 50,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "RE",
+        "position": 2048,
+        "speed": 50,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "L1",
+        "position": 2048,
+        "speed": 50,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "L2",
+        "position": 1024,
+        "speed": 50,
+        "delay_ms": 0
+      },
+      {
+        "motor_id": "LE",
+        "position": 2048,
+        "speed": 50,
+        "delay_ms": 0
+      }
+    ]
+  }
+}

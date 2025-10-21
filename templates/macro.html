@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>매크로</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%F0%9F%A4%96%3C/text%3E%3C/svg%3E" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
+          "three/examples/jsm/": "https://unpkg.com/three@0.157.0/examples/jsm/"
+        }
+      }
+    </script>
+    <style>
+      /* 오른쪽 고정 패널을 위한 전체 페이지 패딩 */
+      body { padding-right: var(--sim-dock-width, 560px); }
+      .macro-wrap { max-width: 720px; margin: 40px auto; background: #2c3643; border: 1px solid #445064; border-radius: 10px; padding: 16px; }
+      .macro-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin-bottom: 6px; }
+      .macro-steps { margin-top: 12px; }
+      .macro-steps .step { display: grid; grid-template-columns: 32px 106px 80px 80px 80px auto auto auto; gap: 6px; margin-bottom: 6px; align-items: center; }
+      .s-drag { cursor: grab; user-select: none; background: #4a5568; border: 1px solid #5a6570; color: #fff; border-radius: 6px; padding: 6px 10px; }
+      .step.dragging { opacity: 0.6; }
+      .macro-list { margin-top: 20px; }
+      .macro-list-item { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; padding: 8px; background: #3a4654; border-radius: 6px; margin-bottom: 6px; }
+      .macro-list-item button { background: #4a5568; border: 1px solid #5a6570; color: #fff; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+      input, select { background: #4a5568; color: #fff; border: 1px solid #5a6570; border-radius: 6px; padding: 6px 8px; }
+      .btn { background: #4a5568; border: 1px solid #5a6570; color: #fff; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+      .macro-steps .step .btn { padding: 6px 8px; font-size: 12px; white-space: nowrap; }
+      .macro-steps .step input, .macro-steps .step select { height: 28px; font-size: 12px; }
+      .sim-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+      /* 오른쪽 고정 시뮬 패널 */
+      .sim-canvas-wrap.sim-dock { position: fixed; top: 0; right: 0; width: var(--sim-dock-width, 560px); height: 100vh; margin: 0; border-left: 1px solid #445064; border-radius: 0; padding: 8px; background: #1f2732; z-index: 1000; display: flex; flex-direction: column; }
+      .sim-canvas-wrap.sim-dock #arm-sim-3d { flex: 1; width: 100%; height: calc(100% - 24px); }
+      .sim-canvas-wrap.sim-dock .sim-resizer { position: absolute; top: 0; left: 0; width: 8px; height: 100%; cursor: col-resize; z-index: 1001; }
+      .sim-canvas-wrap.sim-dock .sim-resizer::after { content: ''; position: absolute; top: 0; right: -1px; width: 2px; height: 100%; background: rgba(255,255,255,0.08); }
+      .sim-legend { font-size: 12px; color: #cbd5e1; margin-top: 4px; }
+
+      @media (max-width: 1200px) {
+        .macro-steps .step { grid-template-columns: 28px 96px 72px 72px 72px auto auto auto; gap: 4px; }
+        .macro-steps .step .btn { padding: 4px 6px; font-size: 11px; }
+        .macro-steps .step input, .macro-steps .step select { height: 26px; font-size: 11px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="macro-wrap">
+      <h2>매크로 관리</h2>
+      <div class="macro-row">
+        <input id="macro-name" placeholder="매크로 이름" />
+        <button class="btn" id="add-step">스텝 추가</button>
+      </div>
+      <div class="sim-row">
+        <label style="display:flex; align-items:center; gap:6px;">
+          <input id="sim-toggle" type="checkbox" checked /> 시뮬레이션 모드
+        </label>
+        <button class="btn" id="sim-reset">시뮬레이션 초기화</button>
+        <button class="btn" id="cam-reset">카메라 리셋</button>
+      </div>
+      <div class="sim-row" style="gap:10px; font-size:12px;">
+        <span style="opacity:.8">축 반전:</span>
+        <label><input type="checkbox" class="axis-inv" data-key="r_s1" /> R 어깨1</label>
+        <label><input type="checkbox" class="axis-inv" data-key="r_s2" /> R 어깨2</label>
+        <label><input type="checkbox" class="axis-inv" data-key="r_e" /> R 팔꿈치</label>
+        <span style="width:10px"></span>
+        <label><input type="checkbox" class="axis-inv" data-key="l_s1" /> L 어깨1</label>
+        <label><input type="checkbox" class="axis-inv" data-key="l_s2" /> L 어깨2</label>
+        <label><input type="checkbox" class="axis-inv" data-key="l_e" /> L 팔꿈치</label>
+      </div>
+      <div class="macro-steps" id="macro-steps"></div>
+      <div class="sim-canvas-wrap sim-dock">
+        <div class="sim-resizer" title="크기 조절"></div>
+        <div id="arm-sim-3d"></div>
+        <div class="sim-legend">오른팔 기준: 25(어깨1 상하), 50(어깨2 앞뒤), 75(팔꿈치 앞뒤). 2048이 오른쪽으로 쭉 뻗음.</div>
+      </div>
+      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap: wrap;">
+        <button class="btn" id="save-macro">저장</button>
+        <button class="btn" id="reload-list">목록 새로고침</button>
+        <button class="btn" id="export-macros">내보내기(JSON)</button>
+        <input type="file" id="import-file" accept="application/json" style="display:none" />
+        <button class="btn" id="import-macros">가져오기(JSON)</button>
+      </div>
+      <div class="macro-list" id="macro-list"></div>
+    </div>
+
+    <script type="module">
+      import * as THREE from 'three';
+      import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+      async function getJSON(url, options) {
+        const res = await fetch(url, { cache: 'no-store', ...options });
+        return await res.json();
+      }
+
+      // 모터 옵션을 API에서 동적으로 로드
+      let MOTOR_OPTIONS = [];
+      let MOTOR_KEY_TO_ID = {};  // key -> id 매핑
+      let MOTOR_ID_TO_KEY = {};  // id -> key 매핑
+      const simPose = {};  // 모터별 포지션 저장
+
+      // 모터 설정 로드
+      async function loadMotorConfig() {
+        try {
+          const data = await getJSON('/api/motor-config');
+          if (data.ok && data.motors) {
+            MOTOR_OPTIONS = data.motors.map(m => ({
+              key: m.key,
+              id: m.id,
+              label: m.label
+            }));
+            
+            // 매핑 테이블 생성
+            MOTOR_OPTIONS.forEach(m => {
+              MOTOR_KEY_TO_ID[m.key] = m.id;
+              MOTOR_ID_TO_KEY[m.id] = m.key;
+              simPose[m.id] = 2048;  // 초기 포즈
+            });
+          }
+        } catch (e) {
+          console.error('모터 설정 로드 실패:', e);
+          // 기본값 사용
+          MOTOR_OPTIONS = [
+            { key: 'R1', id: 25, label: 'R1 · 오른쪽 어깨1' },
+            { key: 'R2', id: 50, label: 'R2 · 오른쪽 어깨2' },
+            { key: 'RE', id: 75, label: 'RE · 오른쪽 팔꿈치' },
+            { key: 'L1', id: 100, label: 'L1 · 왼쪽 어깨1' },
+            { key: 'L2', id: 125, label: 'L2 · 왼쪽 어깨2' },
+            { key: 'LE', id: 150, label: 'LE · 왼쪽 팔꿈치' },
+          ];
+          MOTOR_OPTIONS.forEach(m => {
+            MOTOR_KEY_TO_ID[m.key] = m.id;
+            MOTOR_ID_TO_KEY[m.id] = m.key;
+            simPose[m.id] = 2048;
+          });
+        }
+      }
+
+      function motorSelectHTML(selected) {
+        const opts = MOTOR_OPTIONS.map(o => {
+          // selected가 key 또는 id일 수 있음 (하위 호환성)
+          const isSelected = String(selected) === String(o.key) || String(selected) === String(o.id);
+          return `<option value="${o.key}" ${isSelected?'selected':''}>${o.label}</option>`;
+        }).join('');
+        return `<select class="s-motor">${opts}</select>`;
+      }
+
+      // motor_id 값을 실제 ID로 변환 (key 또는 숫자 처리)
+      function resolveMotorId(value) {
+        if (MOTOR_KEY_TO_ID[value] !== undefined) {
+          return MOTOR_KEY_TO_ID[value];
+        }
+        const num = parseInt(value, 10);
+        return isNaN(num) ? 25 : num;  // 기본값 25
+      }
+
+      function addStepRow(motorId='', position='', speed='0', delay='200') {
+        const wrap = document.getElementById('macro-steps');
+        const row = document.createElement('div');
+        row.className = 'step';
+        row.setAttribute('draggable', 'false');
+        row.innerHTML = `
+          <button class="s-drag" title="드래그">☰</button>
+          ${motorSelectHTML(motorId)}
+          <input class="s-pos" type="number" placeholder="위치" value="${position}" />
+          <input class="s-speed" type="number" placeholder="속도" value="${speed}" />
+          <input class="s-delay" type="number" placeholder="지연(ms)" value="${delay}" />
+          <button class="btn s-test">테스트</button>
+          <button class="btn s-copy">복사</button>
+          <button class="btn s-del">삭제</button>
+        `;
+        // 테스트(단계만 전송)
+        row.querySelector('.s-test').addEventListener('click', async () => {
+          const motorKey = row.querySelector('.s-motor').value;
+          const m = resolveMotorId(motorKey);  // key를 ID로 변환
+          const p = parseInt(row.querySelector('.s-pos').value, 10);
+          const sp = parseInt(row.querySelector('.s-speed').value, 10);
+          if (Number.isNaN(p)) { alert('위치를 숫자로 입력하세요.'); return; }
+          const simOn = document.getElementById('sim-toggle').checked;
+          if (simOn) {
+            // 시뮬레이션: 속도 기반으로 애니메이션 이동
+            await animateMotorTo(m, p, sp);
+          } else {
+            try {
+              const res = await fetch('/api/serial/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ motor_id: m, position: p, speed: (Number.isNaN(sp) ? 0 : sp) }) });
+              const data = await res.json();
+              if (!data.ok) alert('전송 실패: ' + (data.error || ''));
+            } catch (e) {
+              alert('전송 오류: ' + e);
+            }
+          }
+        });
+        // 복사(동일 스텝 추가)
+        row.querySelector('.s-copy').addEventListener('click', () => {
+          const m = row.querySelector('.s-motor').value;
+          const p = row.querySelector('.s-pos').value;
+          const sp = row.querySelector('.s-speed').value;
+          const d = row.querySelector('.s-delay').value;
+          addStepRow(m, p, sp, d);
+        });
+        row.querySelector('.s-del').addEventListener('click', () => row.remove());
+
+        // 드래그 앤 드롭: 핸들에만 mousedown 리스너 추가
+        const dragHandle = row.querySelector('.s-drag');
+        dragHandle.addEventListener('mousedown', () => {
+          row.setAttribute('draggable', 'true');
+        });
+        row.addEventListener('dragstart', (e) => {
+          row.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/html', ''); // Firefox 호환
+        });
+        row.addEventListener('dragend', () => {
+          row.classList.remove('dragging');
+          row.setAttribute('draggable', 'false');
+        });
+        // 다른 곳 클릭하면 draggable 해제
+        row.addEventListener('mousedown', (e) => {
+          if (!e.target.classList.contains('s-drag')) {
+            row.setAttribute('draggable', 'false');
+          }
+        });
+        wrap.appendChild(row);
+      }
+
+      // 컨테이너 드래그 오버 시 위치 계산하여 삽입
+      (function initDragContainer(){
+        const wrap = document.getElementById('macro-steps');
+        wrap.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          const afterElement = getDragAfterElement(wrap, e.clientY);
+          const dragging = wrap.querySelector('.dragging');
+          if (!dragging) return;
+          if (afterElement == null) {
+            wrap.appendChild(dragging);
+          } else {
+            wrap.insertBefore(dragging, afterElement);
+          }
+        });
+
+        function getDragAfterElement(container, y) {
+          const draggableElements = [...container.querySelectorAll('.step:not(.dragging)')];
+          return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+              return { offset, element: child };
+            } else {
+              return closest;
+            }
+          }, { offset: Number.NEGATIVE_INFINITY }).element || null;
+        }
+      })();
+
+      async function loadList() {
+        const list = document.getElementById('macro-list');
+        list.innerHTML = '';
+        const data = await getJSON('/api/macros');
+        const macros = data.macros || {};
+        for (const name of Object.keys(macros)) {
+          const item = document.createElement('div');
+          item.className = 'macro-list-item';
+          item.innerHTML = `
+            <div>${name}</div>
+            <button class="btn edit">수정</button>
+            <button class="btn run">실행</button>
+            <button class="btn del">삭제</button>
+          `;
+          item.querySelector('.edit').addEventListener('click', async () => {
+            const r = await getJSON(`/api/macros/${encodeURIComponent(name)}`);
+            if (!r.ok) { alert('불러오기 실패: ' + (r.error || '')); return; }
+            // 폼에 로드
+            document.getElementById('macro-name').value = r.name;
+            const wrap = document.getElementById('macro-steps');
+            wrap.innerHTML = '';
+            (r.steps || []).forEach(s => addStepRow(
+              s.motor_id,
+              s.position,
+              (typeof s.speed === 'number' ? s.speed : (parseInt(s.speed || '0', 10) || 0)),
+              (typeof s.delay_ms === 'number' ? s.delay_ms : (parseInt(s.delay_ms || '200', 10) || 200))
+            ));
+          });
+          item.querySelector('.run').addEventListener('click', async () => {
+            const simOn = document.getElementById('sim-toggle').checked;
+            if (simOn) {
+              try {
+                const r = await getJSON(`/api/macros/${encodeURIComponent(name)}`);
+                if (!r.ok) { alert('불러오기 실패: ' + (r.error || '')); return; }
+                playMacroSim(r.steps || []);
+              } catch (e) {
+                alert('시뮬 실행 오류: ' + e);
+              }
+            } else {
+              const r = await getJSON('/api/macros/run-sync', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
+              if (!r.ok) alert('실행 실패: ' + (r.error || ''));
+              else alert('실행 완료');
+            }
+          });
+          item.querySelector('.del').addEventListener('click', async () => {
+            const r = await getJSON(`/api/macros/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            if (!r.ok) alert('삭제 실패: ' + (r.error || ''));
+            else loadList();
+          });
+          list.appendChild(item);
+        }
+      }
+
+      document.getElementById('add-step').addEventListener('click', () => addStepRow());
+      document.getElementById('reload-list').addEventListener('click', loadList);
+      document.getElementById('save-macro').addEventListener('click', async () => {
+        const name = (document.getElementById('macro-name').value || '').trim();
+        if (!name) { alert('이름을 입력하세요'); return; }
+        const steps = [];
+        document.querySelectorAll('#macro-steps .step').forEach(row => {
+          const m = row.querySelector('.s-motor').value;  // key 그대로 저장 (R1, R2 등)
+          const p = parseInt(row.querySelector('.s-pos').value, 10);
+          const sp = parseInt(row.querySelector('.s-speed').value, 10);
+          const d = parseInt(row.querySelector('.s-delay').value, 10);
+          if (m && !Number.isNaN(p)) steps.push({ motor_id: m, position: p, speed: (Number.isNaN(sp) ? 0 : sp), delay_ms: (Number.isNaN(d) ? 200 : d) });
+        });
+        if (steps.length === 0) { alert('최소 1개 이상의 스텝을 추가하세요'); return; }
+        const r = await getJSON('/api/macros', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, steps }) });
+        if (!r.ok) alert('저장 실패: ' + (r.error || ''));
+        else { alert('저장 완료'); loadList(); }
+      });
+
+      // 내보내기
+      document.getElementById('export-macros').addEventListener('click', async () => {
+        const data = await getJSON('/api/macros/export');
+        if (!data.ok) { alert('내보내기 실패'); return; }
+        const blob = new Blob([JSON.stringify({ macros: data.macros || {} }, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'macros.json'; a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      // 가져오기
+      document.getElementById('import-macros').addEventListener('click', () => {
+        document.getElementById('import-file').click();
+      });
+      document.getElementById('import-file').addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const json = JSON.parse(text);
+          const r = await getJSON('/api/macros/import', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(json) });
+          if (!r.ok) alert('가져오기 실패: ' + (r.error || ''));
+          else { alert('가져오기 완료'); loadList(); }
+        } catch (err) {
+          alert('잘못된 JSON 파일입니다.');
+        } finally {
+          e.target.value = '';
+        }
+      });
+
+      // --- 3D 시뮬레이션 (THREE.js) ---
+      function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+      function mapPosToDeg(pos, degMin, degMax) {
+        const t = clamp(pos, 0, 4096) / 4096; // 0..1
+        return degMin + (degMax - degMin) * t;
+      }
+
+      // 축 반전 상태
+      const axisInvert = { r_s1:false, r_s2:false, r_e:false, l_s1:false, l_s2:false, l_e:false };
+
+      // 모터 -> 각도 매핑 (오른팔 기준)
+      // 역할 교체: 어깨1=앞뒤(Y), 어깨2=상하(Z)
+      function rightShoulder1Deg(p) { let v = mapPosToDeg(p, 45, -45); v *= 4; v = -v; return axisInvert.r_s1 ? -v : v; } // 앞뒤(Y축, 4배, 반전)
+      function rightShoulder2Deg(p) { let v = (2048 - clamp(p,0,4096)) / 2048 * 90; v *= 2; v = -v; return axisInvert.r_s2 ? -v : v; } // 상하(Z축, 2배, 기본 반전)
+      function rightElbowDeg(p) { let v = (2048 - clamp(p,0,4096)) / 2048 * 90; v *= 2; v = -v; return axisInvert.r_e ? -v : v; } // 아래로 굽힘(Z축, 2배)
+
+      // 왼팔(미러)
+      // 어깨1=앞뒤(Y), 어깨2=상하(Z) — 오른팔의 미러 부호
+      function leftShoulder1Deg(p) { let v = mapPosToDeg(p, -45, 45); v *= 4; return axisInvert.l_s1 ? -v : v; }
+      function leftShoulder2Deg(p) { let v = (clamp(p,0,4096) - 2048) / 2048 * 90; v *= 2; v = -v; return axisInvert.l_s2 ? -v : v; }
+      function leftElbowDeg(p) { let v = (clamp(p,0,4096) - 2048) / 2048 * 90; v *= 2; v = -v; return axisInvert.l_e ? -v : v; }
+
+      let sim3d = null;
+      function initSim3D() {
+        const container = document.getElementById('arm-sim-3d');
+        const W = container.clientWidth || 520;
+        const H = container.clientHeight || 320;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#0f1720');
+
+        const camera = new THREE.PerspectiveCamera(35, W/H, 0.1, 1000);
+        camera.position.set(0, 80, 260);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(W, H, true);
+        container.innerHTML = '';
+        container.appendChild(renderer.domElement);
+
+        // 컨트롤
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.target.set(0, 20, 0);
+
+        // 조명
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+        dir.position.set(100, 120, 80);
+        scene.add(dir);
+
+        // 바닥 그리드
+        const grid = new THREE.GridHelper(400, 10, 0x1f2a37, 0x1f2a37);
+        grid.position.y = -60;
+        scene.add(grid);
+
+        // 몸통(기준)
+        const torsoGeo = new THREE.BoxGeometry(30, 120, 20);
+        const torsoMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.1, roughness: 0.8 });
+        const torso = new THREE.Mesh(torsoGeo, torsoMat);
+        scene.add(torso);
+
+        // 어깨 기준점(같은 위치에서 두 관절 회전)
+        const shoulderY = 20;
+        const shoulderOffsetX = 60;
+
+        function buildArm(side) {
+          const sign = side === 'right' ? 1 : -1;
+          const color = side === 'right' ? 0x60a5fa : 0xfca5a5;
+
+          const groupRoot = new THREE.Object3D();
+          groupRoot.position.set(sign * shoulderOffsetX, shoulderY, 0);
+          scene.add(groupRoot);
+
+          // 어깨2(Yaw, 앞뒤)
+          const nodeYaw = new THREE.Object3D();
+          groupRoot.add(nodeYaw);
+
+          // 어깨1(Pitch, 상하) - 어깨2(Yaw) 다음 위치로 오프셋
+          const nodePitch = new THREE.Object3D();
+          // 양팔: 어깨1 ----(짧은 링크)---- 어깨2 ------ 상완 ------ 팔꿈치
+          const linkLen = 16;
+          nodePitch.position.x = sign * linkLen;
+          nodeYaw.add(nodePitch);
+
+          // 어깨1/어깨2 사이 연결 막대(짧은 로드) - 양팔 적용
+          if (linkLen > 0) {
+            const linkGeo = new THREE.CylinderGeometry(1.5, 1.5, linkLen, 12);
+            const linkMat = new THREE.MeshStandardMaterial({ color, metalness: 0.2, roughness: 0.6 });
+            const link = new THREE.Mesh(linkGeo, linkMat);
+            link.rotation.z = Math.PI/2 * sign; // X축 방향으로 눕힘
+            link.position.x = sign * (linkLen / 2);
+            nodeYaw.add(link);
+          }
+
+          // 상완
+          const upperLen = 70;
+          const upperGeo = new THREE.CapsuleGeometry(6, upperLen-12, 4, 8);
+          const upperMat = new THREE.MeshStandardMaterial({ color, metalness: 0.2, roughness: 0.6 });
+          const upper = new THREE.Mesh(upperGeo, upperMat);
+          upper.rotation.z = Math.PI/2 * sign; // 길이축을 X축 방향으로
+          upper.position.x = sign * (upperLen/2);
+          nodePitch.add(upper);
+
+          // 팔꿈치 힌지
+          const nodeElbow = new THREE.Object3D();
+          nodeElbow.position.x = sign * upperLen; // 어깨2에서 팔꿈치까지 긴 링크
+          nodePitch.add(nodeElbow);
+
+          // 전완
+          const lowerLen = 70;
+          const lowerGeo = new THREE.CapsuleGeometry(5, lowerLen-10, 4, 8);
+          const lowerMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, metalness: 0.2, roughness: 0.7 });
+          const lower = new THREE.Mesh(lowerGeo, lowerMat);
+          lower.rotation.z = Math.PI/2 * sign;
+          lower.position.x = sign * (lowerLen/2);
+          nodeElbow.add(lower);
+
+          // 관절 표시용 구
+          const jointGeo = new THREE.SphereGeometry(5, 16, 16);
+          const jointMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x111111, roughness: 0.7 });
+          const shoulderJoint = new THREE.Mesh(jointGeo, jointMat);
+          const elbowJoint = new THREE.Mesh(jointGeo, jointMat);
+          shoulderJoint.position.set(0,0,0);
+          elbowJoint.position.set(sign * upperLen, 0, 0);
+          nodePitch.add(shoulderJoint);
+          nodePitch.add(elbowJoint);
+
+          return { root: groupRoot, nodeYaw, nodePitch, nodeElbow };
+        }
+
+        const right = buildArm('right');
+        const left = buildArm('left');
+
+        sim3d = { scene, camera, renderer, controls, right, left };
+
+        function animate() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(animate); }
+        animate();
+      }
+
+      function updateSim3D() {
+        if (!sim3d) return;
+        const { right, left } = sim3d;
+        // 오른팔 (어깨1=Y, 어깨2=Z)
+        right.nodeYaw.rotation.y = THREE.MathUtils.degToRad(rightShoulder1Deg(simPose[25]));
+        right.nodePitch.rotation.z = THREE.MathUtils.degToRad(rightShoulder2Deg(simPose[50]));
+        right.nodeElbow.rotation.z = THREE.MathUtils.degToRad(rightElbowDeg(simPose[75]));
+        // 왼팔 (미러: 어깨1=Y with 100, 어깨2=Z with 125)
+        left.nodeYaw.rotation.y = THREE.MathUtils.degToRad(leftShoulder1Deg(simPose[100]));
+        left.nodePitch.rotation.z = THREE.MathUtils.degToRad(leftShoulder2Deg(simPose[125]));
+        left.nodeElbow.rotation.z = THREE.MathUtils.degToRad(leftElbowDeg(simPose[150]));
+      }
+
+      function playMacroSim(steps) {
+        if (!Array.isArray(steps) || steps.length === 0) return;
+        let i = 0;
+        async function next() {
+          if (i >= steps.length) return;
+          const s = steps[i++];
+          const m = resolveMotorId(s.motor_id);  // key 또는 숫자 ID 처리
+          const p = parseInt(s.position, 10);
+          const sp = parseInt((s.speed ?? 0), 10);
+          const d = parseInt(s.delay_ms || 200, 10);
+          const t0 = performance.now();
+          if (!Number.isNaN(p)) {
+            await animateMotorTo(m, p, sp);
+          }
+          const elapsed = performance.now() - t0;
+          const totalDelay = effectiveDelayMs(d, sp);
+          const remaining = Math.max(0, totalDelay - elapsed);
+          setTimeout(next, remaining);
+        }
+        next();
+      }
+
+      document.getElementById('sim-reset').addEventListener('click', () => {
+        Object.keys(simPose).forEach(k => simPose[k] = 2048);
+        updateSim3D();
+      });
+
+      document.getElementById('cam-reset').addEventListener('click', () => {
+        if (!sim3d) return;
+        sim3d.camera.position.set(0, 80, 260);
+        sim3d.controls.target.set(0, 20, 0);
+        sim3d.controls.update();
+      });
+
+      // 축 반전 토글 바인딩
+      document.querySelectorAll('.axis-inv').forEach(chk => {
+        chk.addEventListener('change', () => {
+          const k = chk.getAttribute('data-key');
+          axisInvert[k] = chk.checked;
+          updateSim3D();
+        });
+      });
+
+      // 초기화
+      (async () => {
+        await loadMotorConfig();  // 모터 설정 먼저 로드
+        initSim3D();  // 시뮬레이션 초기화
+        updateSim3D();  // 시뮬레이션 렌더링
+        loadList();  // 매크로 목록 로드
+      })();
+
+      // 리사이즈 대응 (오른쪽 도킹 패널의 크기에 맞춤)
+      function resizeRendererToDisplaySize() {
+        if (!sim3d) return;
+        const container = document.getElementById('arm-sim-3d');
+        const W = container.clientWidth || 520;
+        const H = container.clientHeight || 320;
+        sim3d.renderer.setSize(W, H, true);
+        sim3d.camera.aspect = W / H;
+        sim3d.camera.updateProjectionMatrix();
+      }
+      window.addEventListener('resize', resizeRendererToDisplaySize);
+      setInterval(resizeRendererToDisplaySize, 300);
+
+      // 드래그 리사이즈: 좌측 바를 드래그해 너비 변경
+      (function initSimResizer(){
+        const dock = document.querySelector('.sim-canvas-wrap.sim-dock');
+        const resizer = dock && dock.querySelector('.sim-resizer');
+        if (!dock || !resizer) return;
+        let dragging = false;
+        let startX = 0;
+        let startWidth = 0;
+
+        function setDockWidth(px) {
+          const minW = 360, maxW = Math.min(window.innerWidth - 320, 1000);
+          const w = Math.max(minW, Math.min(maxW, px));
+          document.documentElement.style.setProperty('--sim-dock-width', w + 'px');
+          // 본문 패딩도 함께
+          document.body.style.paddingRight = 'var(--sim-dock-width)';
+          resizeRendererToDisplaySize();
+        }
+
+        resizer.addEventListener('mousedown', (e) => {
+          dragging = true;
+          startX = e.clientX;
+          startWidth = dock.getBoundingClientRect().width;
+          document.body.style.userSelect = 'none';
+        });
+        window.addEventListener('mousemove', (e) => {
+          if (!dragging) return;
+          const dx = startX - e.clientX; // 왼쪽으로 끌수록 커짐
+          setDockWidth(startWidth + dx);
+        });
+        window.addEventListener('mouseup', () => {
+          if (!dragging) return;
+          dragging = false;
+          document.body.style.userSelect = '';
+        });
+      })();
+
+      // --- 속도 기반 애니메이션 ---
+      function animateMotorTo(motorId, targetPos, speed) {
+        return new Promise(resolve => {
+          const fps = 60;
+          const dt = 1 / fps; // 초
+          // 경험적 매핑: speed(0~1023?) -> 초당 4096스텝의 비율. 기본 0이면 즉시 이동
+          const maxStepsPerSec = 2048 * 7.5;
+          const v = Math.max(0, Number.isFinite(speed) ? speed : 0);
+          if (v <= 0) {
+            simPose[motorId] = targetPos;
+            updateSim3D();
+            resolve();
+            return;
+          }
+          // 비선형 보정: v=100에서 기존 선형과 동일, v가 커질수록 증가율 완만
+          const vNorm = Math.min(1, Math.max(0, v / 1023));
+          const alpha = 1.2; // 1보다 크면 고속 구간을 완만하게
+          const baseNorm = 100 / 1023; // 보정 기준점
+          const linearAt100 = baseNorm * maxStepsPerSec;
+          const k = linearAt100 / Math.pow(baseNorm, alpha);
+          const stepsPerSec = k * Math.pow(vNorm, alpha);
+          const stepPerFrame = stepsPerSec * dt;
+
+          function tick() {
+            const cur = simPose[motorId] ?? 2048;
+            const diff = targetPos - cur;
+            if (Math.abs(diff) <= stepPerFrame) {
+              simPose[motorId] = targetPos;
+              updateSim3D();
+              resolve();
+              return;
+            }
+            simPose[motorId] = cur + Math.sign(diff) * stepPerFrame;
+            updateSim3D();
+            requestAnimationFrame(tick);
+          }
+          requestAnimationFrame(tick);
+        });
+      }
+      
+      // 속도에 따른 대기시간 스케일: 빠를수록 더 짧게 (최대 5배 단축)
+      function effectiveDelayMs(delayMs, speed) {
+        const v = Math.max(0, Number.isFinite(speed) ? speed : 0);
+        if (v <= 0) return delayMs;
+        const factor = v / 1023; // 0..1
+        const scale = 1 / (1 + 4 * factor); // v=0 =>1x, v=1023 => ~0.2x
+        return Math.max(0, Math.round(delayMs * scale));
+      }
+    </script>
+  </body>
+  </html>
+
+
