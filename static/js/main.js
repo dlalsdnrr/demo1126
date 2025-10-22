@@ -206,6 +206,7 @@ function initSerialPanel() {
   const macrosBtn = document.getElementById('serial-macros');
   const motorInput = document.getElementById('serial-motor-id');
   const posInput = document.getElementById('serial-position');
+  const speedInput = document.getElementById('serial-speed');
 
   async function getJSON(url, options) {
       const res = await fetch(url, { cache: 'no-store', ...options });
@@ -215,9 +216,18 @@ function initSerialPanel() {
   async function sendCommand() {
       const motor_id = parseInt(motorInput.value, 10);
       const position = parseInt(posInput.value, 10);
-      if (Number.isNaN(motor_id) || Number.isNaN(position)) { alert('ID와 위치를 숫자로 입력하세요.'); return; }
-      const data = await getJSON('/api/serial/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ motor_id, position }) });
+      const speed = parseInt(speedInput.value, 10) || 0;
+      if (Number.isNaN(motor_id) || Number.isNaN(position)) { 
+          alert('ID와 위치를 숫자로 입력하세요.'); 
+          return; 
+      }
+      const data = await getJSON('/api/serial/send', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ motor_id, position, speed }) 
+      });
       if (!data.ok) alert('전송 실패: ' + (data.error || ''));
+      else console.log('전송 성공:', data);
   }
 
   // UI 바인딩

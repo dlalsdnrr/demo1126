@@ -268,15 +268,72 @@ body {
 .serial-btn { background: #4a5568; border: 1px solid #5a6570; color: #fff; border-radius: 8px; padding: 6px 10px; cursor: pointer; }
 
 /* Serial panel */
-.serial-panel { position: fixed; top: 48px; right: 8px; width: 480px; max-height: calc(100vh - 64px); overflow: auto; background: var(--panel); border: 1px solid #5a6570; border-radius: 10px; padding: 10px; z-index: 1200; display: none; }
+.serial-panel { position: fixed; top: 48px; right: 8px; width: 480px; max-height: calc(100vh - 64px); overflow: auto; background: var(--panel); border: 1px solid #5a6570; border-radius: 10px; padding: 14px; z-index: 1200; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
 .serial-panel.open { display: block; }
-.serial-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.serial-panel-header button { background: transparent; color: var(--text); border: 0; cursor: pointer; font-size: 16px; }
-.serial-panel-body { display: grid; gap: 10px; }
+.serial-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 600; }
+.serial-panel-header button { background: transparent; color: var(--text); border: 0; cursor: pointer; font-size: 18px; padding: 4px; opacity: 0.7; transition: opacity 0.2s; }
+.serial-panel-header button:hover { opacity: 1; }
+.serial-panel-body { display: grid; gap: 12px; }
 .serial-status { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
 .serial-actions label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
 .serial-actions input, .serial-actions select { background: #4a5568; color: #fff; border: 1px solid #5a6570; border-radius: 6px; padding: 6px 8px; }
+
+/* 시리얼 전송 폼 - 깔끔한 그리드 레이아웃 */
+.serial-send { 
+  display: grid; 
+  grid-template-columns: 1fr 135px 135px; 
+  gap: 8px; 
+  align-items: end; 
+}
+.serial-send label { 
+  display: grid; 
+  gap: 4px; 
+  font-size: 12px; 
+  color: var(--muted); 
+  font-weight: 500;
+}
+.serial-send input, 
+.serial-send select { 
+  background: #4a5568; 
+  color: #fff; 
+  border: 1px solid #5a6570; 
+  border-radius: 6px; 
+  padding: 8px 10px; 
+  width: 100%;
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+.serial-send input:focus,
+.serial-send select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* 버튼 영역 */
+.serial-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.serial-buttons button {
+  background: linear-gradient(180deg, #1f7dd8, #165aa1);
+  border: 1px solid #2b6cb0;
+  color: #fff;
+  border-radius: 6px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.serial-buttons button:hover {
+  background: linear-gradient(180deg, #2688e8, #1768b1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(31,125,216,0.4);
+}
+.serial-buttons button:active {
+  transform: translateY(0);
+}
+
 .btn-row { display: grid; padding-top: 5px; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.btn-row button, .serial-send button { background: #4a5568; border: 1px solid #5a6570; color: #fff; border-radius: 6px; padding: 8px 10px; cursor: pointer; }
-.serial-send { display: grid; grid-template-columns: 110px 110px auto; gap: 8px; align-items: end; }
-.serial-send input { width: 100%; }
+.btn-row button { background: #4a5568; border: 1px solid #5a6570; color: #fff; border-radius: 6px; padding: 8px 10px; cursor: pointer; }

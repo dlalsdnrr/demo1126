@@ -6,7 +6,12 @@ import time
 from typing import Optional, Dict, Any
 
 from flask import Blueprint, jsonify, request
-from config import GEMINI_API_KEY as DEFAULT_GEMINI_API_KEY
+from config import (
+    GEMINI_API_KEY as DEFAULT_GEMINI_API_KEY,
+    VOICE_WAKE_MODEL,
+    VOICE_CONVERSATION_MODEL,
+    VAD_AGGRESSIVENESS
+)
 
 # --- STT (Faster Whisper) 및 오디오 입력 (sounddevice) ---
 try:
@@ -40,25 +45,56 @@ try:
 except Exception:  # pragma: no cover
     genai = None
 
+# --- VAD (Voice Activity Detection) ---
+try:
+    import webrtcvad
+    VAD_AVAILABLE = True
+except Exception:  # pragma: no cover
+    webrtcvad = None
+    VAD_AVAILABLE = False
+    print("Warning: webrtcvad not installed. VAD unavailable.")
+
 RESPEAKER_INDEX = 1
 
 # --- 새로운 STT 설정 ---
 SAMPLE_RATE = 16000
-RECORD_SECONDS = 4.0 # 인식 시간을 4초로 설정
-WHISPER_MODEL = None # 모델은 처음 로드 시에 초기화됩니다.
+WHISPER_WAKE_MODEL = None      # tiny 모델 (트리거 감지용)
+WHISPER_CONV_MODEL = None      # base 모델 (대화용)
 
-def load_whisper_model():
-    """Faster Whisper 모델을 로드하는 함수"""
-    global WHISPER_MODEL
-    if WHISPER_MODEL is None and WhisperModel is not None:
-        try:
-            # 모델을 'base'로 유지 (성능 우선)
-            WHISPER_MODEL = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=4)
-            print("--- INFO: Faster Whisper model loaded successfully.")
-        except Exception as e:
-            print(f"--- ERROR: Failed to load Whisper model: {e}")
-            pass
-    return WHISPER_MODEL
+def load_whisper_models():
+    """하이브리드 Whisper 모델을 로드하는 함수"""
+    global WHISPER_WAKE_MODEL, WHISPER_CONV_MODEL
+    
+    if WhisperModel is None:
+        return False
+    
+    try:
+        # 1. Wake 모델 (tiny) - 트리거 감지용
+        if WHISPER_WAKE_MODEL is None:
+            print(f"--- INFO: Loading wake model ({VOICE_WAKE_MODEL})...")
+            WHISPER_WAKE_MODEL = WhisperModel(
+                VOICE_WAKE_MODEL, 
+                device="cpu", 
+                compute_type="int8", 
+                cpu_threads=2
+            )
+            print(f"--- INFO: Wake model ({VOICE_WAKE_MODEL}) loaded successfully.")
+        
+        # 2. Conversation 모델 (base) - 대화용
+        if WHISPER_CONV_MODEL is None:
+            print(f"--- INFO: Loading conversation model ({VOICE_CONVERSATION_MODEL})...")
+            WHISPER_CONV_MODEL = WhisperModel(
+                VOICE_CONVERSATION_MODEL,
+                device="cpu",
+                compute_type="int8",
+                cpu_threads=4
+            )
+            print(f"--- INFO: Conversation model ({VOICE_CONVERSATION_MODEL}) loaded successfully.")
+        
+        return True
+    except Exception as e:
+        print(f"--- ERROR: Failed to load Whisper models: {e}")
+        return False
 
 
 class VoiceAssistant:
@@ -94,7 +130,22 @@ class VoiceAssistant:
         self._last_ai_text: Optional[str] = None
         self._last_error: Optional[str] = None
         self._require_trigger: bool = True
-        self._whisper_model = load_whisper_model()
+        self._current_mode: str = "wake"  # "wake" or "conversation"
+        
+        # 모델 로드
+        self._models_loaded = load_whisper_models()
+        
+        # VAD 초기화
+        if VAD_AVAILABLE:
+            try:
+                self._vad = webrtcvad.Vad(VAD_AGGRESSIVENESS)
+                self._vad_enabled = True
+            except:
+                self._vad = None
+                self._vad_enabled = False
+        else:
+            self._vad = None
+            self._vad_enabled = False
 
 
     def start(self, api_key: Optional[str] = None, model_name: Optional[str] = None, require_trigger: Optional[bool] = True) -> None:
@@ -108,8 +159,8 @@ class VoiceAssistant:
                 return
 
             # 2. 스레드가 꺼져있는 경우 (신규 시작)
-            if not self._whisper_model:
-                print("--- ERROR: STT is not ready. Cannot start assistant.")
+            if not self._models_loaded:
+                print("--- ERROR: STT models are not ready. Cannot start assistant.")
                 return
 
             self._stop_event.clear()
@@ -178,9 +229,11 @@ class VoiceAssistant:
                 "last_user_text": self._last_user_text,
                 "last_ai_text": self._last_ai_text,
                 "last_error": self._last_error,
-                "stt_ready": bool(self._whisper_model is not None),
+                "current_mode": self._current_mode,
+                "stt_ready": self._models_loaded,
                 "tts_ready": TTS_AVAILABLE,
                 "gemini_ready": bool(genai is not None),
+                "vad_enabled": self._vad_enabled,
             }
 
     def set_trigger_phrase(self, phrase: str) -> None:
@@ -238,34 +291,73 @@ class VoiceAssistant:
                     pass
 
     def _record_audio(self) -> Optional[np.ndarray]:
+        """현재 모드에 맞는 시간으로 녹음"""
         if sd is None:
             self._last_error = "sounddevice is not installed."
             return None
 
+        # Wake 모드: 2초, Conversation 모드: 4초
+        record_seconds = 2.0 if self._current_mode == "wake" else 4.0
+
         try:
             device_info = sd.query_devices(RESPEAKER_INDEX, 'input')
-            print(f"--- INFO: Recording using device: {device_info['name']}")
-            audio = sd.rec(int(RECORD_SECONDS * SAMPLE_RATE),
+            print(f"--- INFO: Recording ({self._current_mode} mode, {record_seconds}s) using device: {device_info['name']}")
+            audio = sd.rec(int(record_seconds * SAMPLE_RATE),
                            samplerate=SAMPLE_RATE, channels=1, dtype='int16',
                            device=RESPEAKER_INDEX)
             sd.wait()
-            return audio.squeeze().astype(np.float32) / 32768.0
+            
+            audio_float = audio.squeeze().astype(np.float32) / 32768.0
+            
+            # Wake 모드에서 VAD로 무음 체크
+            if self._current_mode == "wake" and self._vad_enabled:
+                audio_bytes = audio.tobytes()
+                chunk_duration_ms = 30  # 30ms 청크
+                chunk_size = int(SAMPLE_RATE * chunk_duration_ms / 1000) * 2  # 2 bytes per sample
+                
+                has_speech = False
+                for i in range(0, len(audio_bytes) - chunk_size, chunk_size):
+                    chunk = audio_bytes[i:i + chunk_size]
+                    try:
+                        if self._vad.is_speech(chunk, SAMPLE_RATE):
+                            has_speech = True
+                            break
+                    except:
+                        pass  # VAD 오류 무시
+                
+                if not has_speech:
+                    # 무음이면 None 반환 (처리 생략)
+                    return None
+            
+            return audio_float
         except Exception as e:
             self._last_error = f"Audio record failed: {e}"
             print(f"--- ERROR: Audio record failed: {e}")
             return None
 
     def _transcribe(self, audio: np.ndarray) -> Optional[str]:
-        if self._whisper_model is None:
+        """현재 모드에 맞는 모델로 transcribe"""
+        # 모드에 따라 모델 선택
+        if self._current_mode == "wake":
+            model = WHISPER_WAKE_MODEL
+            beam_size = 3
+            best_of = 3
+        else:
+            model = WHISPER_CONV_MODEL
+            beam_size = 5
+            best_of = 5
+        
+        if model is None:
             return None
 
         try:
-            segments, _ = self._whisper_model.transcribe(
+            segments, _ = model.transcribe(
                 audio,
                 language="ko",
-                beam_size=5, best_of=5,
+                beam_size=beam_size,
+                best_of=best_of,
                 vad_filter=True,
-                vad_parameters={"min_silence_duration_ms": 500}
+                vad_parameters={"min_silence_duration_ms": 500 if self._current_mode == "wake" else 300}
             )
             text = " ".join(segment.text.strip() for segment in segments).lower()
             return text if text else None
@@ -280,61 +372,73 @@ class VoiceAssistant:
         return self._transcribe(audio)
 
     def _listen_loop(self) -> None:
+        """하이브리드 모델을 사용한 메인 루프"""
         self._ensure_gemini_model()
 
         while not self._stop_event.is_set():
-            if self._whisper_model is None or sd is None:
+            if not self._models_loaded or sd is None:
                 time.sleep(1.0)
                 continue
 
             utterance: Optional[str] = None
 
-            print("--- INFO: Listening...")
-            utterance = self._listen_once()
-
-            if utterance:
-                print(f"--- INFO: Transcribed Text: {utterance}")
-
+            # 활성 상태가 아니면 wake 모드
             if not self.is_active():
+                self._current_mode = "wake"  # tiny 모델 사용
+                
                 if self._require_trigger:
+                    print("--- INFO: Wake mode - Listening for trigger (tiny model)...")
+                    utterance = self._listen_once()
+
                     if not utterance:
-                        time.sleep(0.5)
+                        time.sleep(0.3)  # 짧은 대기
                         continue
 
+                    print(f"--- INFO: Transcribed Text (wake): {utterance}")
                     normalized = utterance.replace(" ", "")
 
                     if any(kw in normalized for kw in self.trigger_keywords):
                         with self._lock:
                             self._active_conversation = True
+                            self._current_mode = "conversation"  # base 모델로 전환
                             self._last_user_text = utterance
 
                         if self._gemini_model is None:
                             self._say("Gemini 설정에 문제가 있습니다. API 키를 확인해주세요.")
                             with self._lock:
                                 self._active_conversation = False
+                                self._current_mode = "wake"
                             continue
 
+                        print("--- INFO: Switched to conversation mode (base model)")
                         threading.Timer(0.5, self._say, args=["네, 반가워요. 말씀해주세요."]).start()
-
                         continue
                     else:
-                        time.sleep(0.5)
+                        time.sleep(0.3)
                         continue
-                else: # 트리거 불필요 모드
+                else:  # 트리거 불필요 모드
                     with self._lock:
                         self._active_conversation = True
+                        self._current_mode = "conversation"
                     continue
 
-            # --- 대화 활성 모드 ---
+            # --- 대화 활성 모드 (base 모델) ---
+            self._current_mode = "conversation"  # base 모델 사용
+            print("--- INFO: Conversation mode - Listening (base model)...")
+            utterance = self._listen_once()
+
             if not utterance:
-                time.sleep(0.5)
+                time.sleep(0.3)
                 continue
+
+            print(f"--- INFO: Transcribed Text (conversation): {utterance}")
 
             # '종료' 명령어 (대기 모드로 전환)
             if any(exit_kw in utterance for exit_kw in self.exit_keywords):
-                # TTS 호출을 go_to_standby 메소드로 이전하여 일관성을 유지합니다.
                 self.go_to_standby()
-                continue # 루프 계속 (대기)
+                self._current_mode = "wake"  # 다시 tiny 모드로
+                print("--- INFO: Switched back to wake mode (tiny model)")
+                continue
 
             # Gemini API 호출
             with self._lock:

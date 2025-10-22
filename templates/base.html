@@ -30,7 +30,7 @@
       </div>
       <div class="serial-panel-body">
         <div class="serial-send">
-          <label>모터 ID 
+          <label class="field-motor">모터 ID 
             <select id="serial-motor-id">
               <option value="25">25 · 오른쪽 어깨1</option>
               <option value="50">50 · 오른쪽 어깨2</option>
@@ -40,8 +40,14 @@
               <option value="150" selected>150 · 왼쪽 팔꿈치</option>
             </select>
           </label>
-          <label>위치 <input id="serial-position" type="number" value="0" /></label>
-          <label>속도 <input id="serial-speed" type="number" value="0" /></label>
+          <label class="field-position">위치 
+            <input id="serial-position" type="number" value="0" />
+          </label>
+          <label class="field-speed">속도 
+            <input id="serial-speed" type="number" value="0" />
+          </label>
+        </div>
+        <div class="serial-buttons">
           <button id="serial-send">테스트 전송</button>
           <button id="serial-macros">매크로</button>
         </div>

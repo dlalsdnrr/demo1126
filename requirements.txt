@@ -22,3 +22,6 @@ pydub
 # Gemini AI API
 google-generativeai
 
+# VAD (Voice Activity Detection)
+webrtcvad
+
