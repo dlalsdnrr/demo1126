@@ -21,8 +21,7 @@ MOTOR_ID_MAP: Dict[str, int] = {
 }
 
 # 음성 인식 설정
-VOICE_WAKE_MODEL = "tiny"          # 대기/트리거 감지용 (빠름)
-VOICE_CONV_MODEL = "base"  # 실제 대화용 (정확)
+VOICE_CONV_MODEL = "base"          # Whisper 모델 (모든 모드에서 사용)
 VAD_AGGRESSIVENESS = 2             # 0~3 (높을수록 민감)
 WAKE_WORD_CONFIDENCE = 0.3         # 트리거 민감도
 

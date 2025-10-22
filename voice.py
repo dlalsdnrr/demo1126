@@ -8,7 +8,6 @@ from typing import Optional, Dict, Any
 from flask import Blueprint, jsonify, request
 from config import (
     GEMINI_API_KEY as DEFAULT_GEMINI_API_KEY,
-    VOICE_WAKE_MODEL,
     VOICE_CONV_MODEL,
     VAD_AGGRESSIVENESS,
     SILENCE_THRESHOLD as CONFIG_SILENCE_THRESHOLD,
@@ -26,20 +25,33 @@ except Exception:  # pragma: no cover
     np = None
     print("Warning: sounddevice or faster-whisper not installed. Voice input unavailable.")
 
-# --- TTS (gTTS + pydub) ---
+# --- TTS (edge-tts + pydub) ---
 try:
-    from gtts import gTTS
+    import edge_tts
+    import asyncio
     from pydub import AudioSegment
     from pydub.playback import play
     from pydub.effects import speedup
+    import io
     TTS_AVAILABLE = True
+    USE_EDGE_TTS = True
 except Exception: # pragma: no cover
-    gTTS = None
-    AudioSegment = None
-    play = None
-    speedup = None
-    TTS_AVAILABLE = False
-    print("Warning: gTTS or pydub not installed, or FFmpeg is missing. TTS unavailable.")
+    edge_tts = None
+    USE_EDGE_TTS = False
+    # Fallback to gTTS
+    try:
+        from gtts import gTTS
+        from pydub import AudioSegment
+        from pydub.playback import play
+        from pydub.effects import speedup
+        TTS_AVAILABLE = True
+    except:
+        gTTS = None
+        AudioSegment = None
+        play = None
+        speedup = None
+        TTS_AVAILABLE = False
+        print("Warning: TTS not available. Install edge-tts or gTTS.")
 
 # --- Gemini API ---
 try:
@@ -60,8 +72,7 @@ RESPEAKER_INDEX = 1
 
 # --- 새로운 STT 설정 ---
 SAMPLE_RATE = 16000
-WHISPER_WAKE_MODEL = None      # tiny 모델 (트리거 감지용)
-WHISPER_CONV_MODEL = None      # base 모델 (대화용)
+WHISPER_CONV_MODEL = None      # base 모델 (모든 모드에서 사용)
 
 # --- 실시간 VAD 설정 ---
 CHUNK_DURATION_MS = 30         # 30ms 청크
@@ -70,38 +81,27 @@ SILENCE_THRESHOLD = CONFIG_SILENCE_THRESHOLD    # 에너지 임계값 (RMS)
 SILENCE_DURATION = CONFIG_SILENCE_DURATION      # 무음 감지 시간 (초)
 
 def load_whisper_models():
-    """하이브리드 Whisper 모델을 로드하는 함수"""
-    global WHISPER_WAKE_MODEL, WHISPER_CONV_MODEL
+    """Whisper 모델을 로드하는 함수"""
+    global WHISPER_CONV_MODEL
     
     if WhisperModel is None:
         return False
     
     try:
-        # 1. Wake 모델 (tiny) - 트리거 감지용
-        if WHISPER_WAKE_MODEL is None:
-            print(f"--- INFO: Loading wake model ({VOICE_WAKE_MODEL})...")
-            WHISPER_WAKE_MODEL = WhisperModel(
-                VOICE_WAKE_MODEL, 
-                device="cpu", 
-                compute_type="int8", 
-                cpu_threads=2
-            )
-            print(f"--- INFO: Wake model ({VOICE_WAKE_MODEL}) loaded successfully.")
-        
-        # 2. Conversation 모델 (base) - 대화용
+        # Base 모델 로드 (모든 모드에서 사용)
         if WHISPER_CONV_MODEL is None:
-            print(f"--- INFO: Loading conversation model ({VOICE_CONV_MODEL})...")
+            print(f"--- INFO: Loading Whisper model ({VOICE_CONV_MODEL})...")
             WHISPER_CONV_MODEL = WhisperModel(
                 VOICE_CONV_MODEL,
                 device="cpu",
                 compute_type="int8",
                 cpu_threads=4
             )
-            print(f"--- INFO: Conversation model ({VOICE_CONV_MODEL}) loaded successfully.")
+            print(f"--- INFO: Whisper model ({VOICE_CONV_MODEL}) loaded successfully.")
         
         return True
     except Exception as e:
-        print(f"--- ERROR: Failed to load Whisper models: {e}")
+        print(f"--- ERROR: Failed to load Whisper model: {e}")
         return False
 
 
@@ -268,12 +268,58 @@ class VoiceAssistant:
     def _say(self, text: str) -> None:
         if not text:
             return
+        
+        # X 버튼 체크 (TTS 시작 전)
+        if not self.is_active():
+            print("--- INFO: TTS skipped - conversation ended")
+            return
+            
         if not TTS_AVAILABLE:
-            print("--- ERROR: gTTS/pydub not available. Skipping TTS.")
+            print("--- ERROR: TTS not available. Skipping TTS.")
             return
 
         print(f"--- INFO: TTS generation for: {text}")
 
+        try:
+            if USE_EDGE_TTS:
+                # edge-tts 사용 (빠름!)
+                asyncio.run(self._say_edge_tts(text))
+            else:
+                # gTTS fallback
+                self._say_gtts(text)
+        except Exception as e:
+            self._last_error = f"TTS error: {e}"
+            print(f"--- ERROR: TTS failed: {e}")
+
+    async def _say_edge_tts(self, text: str) -> None:
+        """edge-tts를 사용한 빠른 음성 합성"""
+        try:
+            # 한국어 음성 선택 (ko-KR-SunHiNeural: 여성 음성, InJoonNeural: 남성 음성)
+            voice = "ko-KR-SunHiNeural"
+            communicate = edge_tts.Communicate(text, voice)
+            
+            # 메모리 버퍼에 저장
+            audio_data = b""
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_data += chunk["data"]
+            
+            # 메모리에서 바로 재생 (파일 저장 불필요!)
+            audio_io = io.BytesIO(audio_data)
+            song = AudioSegment.from_mp3(audio_io)
+            
+            # 1.2배 속도로 재생
+            FASTER_FACTOR = 1.1
+            if FASTER_FACTOR != 1.0:
+                song = speedup(song, playback_speed=FASTER_FACTOR)
+            
+            play(song)
+        except Exception as e:
+            print(f"--- ERROR: edge-tts failed: {e}")
+            raise
+
+    def _say_gtts(self, text: str) -> None:
+        """gTTS를 사용한 음성 합성 (fallback)"""
         if os.path.exists(self._tts_file_path):
             try:
                 os.remove(self._tts_file_path)
@@ -291,13 +337,8 @@ class VoiceAssistant:
             if os.path.exists(self._tts_file_path):
                 os.remove(self._tts_file_path)
         except Exception as e:
-            self._last_error = f"gTTS/pydub error: {e}"
-            print(f"--- ERROR: gTTS/pydub failed (Check FFmpeg/ffplay): {e}")
-            if os.path.exists(self._tts_file_path):
-                try:
-                    os.remove(self._tts_file_path)
-                except Exception:
-                    pass
+            print(f"--- ERROR: gTTS failed: {e}")
+            raise
 
     def _calculate_rms(self, audio_chunk: np.ndarray) -> float:
         """오디오 청크의 RMS(Root Mean Square) 에너지 계산"""
@@ -427,15 +468,18 @@ class VoiceAssistant:
 
     def _transcribe(self, audio: np.ndarray) -> Optional[str]:
         """현재 모드에 맞는 모델로 transcribe"""
-        # 모드에 따라 모델 선택
+        # 모든 모드에서 base 모델 사용 (정확도 우선)
+        model = WHISPER_CONV_MODEL
+        
+        # 모드에 따라 파라미터 조정
         if self._current_mode == "wake":
-            model = WHISPER_WAKE_MODEL
             beam_size = 3
             best_of = 3
+            vad_ms = 500
         else:
-            model = WHISPER_CONV_MODEL
             beam_size = 5
             best_of = 5
+            vad_ms = 300
         
         if model is None:
             return None
@@ -447,7 +491,7 @@ class VoiceAssistant:
                 beam_size=beam_size,
                 best_of=best_of,
                 vad_filter=True,
-                vad_parameters={"min_silence_duration_ms": 500 if self._current_mode == "wake" else 300}
+                vad_parameters={"min_silence_duration_ms": vad_ms}
             )
             text = " ".join(segment.text.strip() for segment in segments).lower()
             return text if text else None
@@ -484,7 +528,7 @@ class VoiceAssistant:
                 self._current_mode = "wake"  # tiny 모델 사용
                 
                 if self._require_trigger:
-                    print("--- INFO: Wake mode - Listening for trigger (tiny model)...")
+                    print("--- INFO: Wake mode - Listening for trigger (base model)...")
                     utterance = self._listen_once()
 
                     if not utterance:
@@ -507,7 +551,7 @@ class VoiceAssistant:
                                 self._current_mode = "wake"
                             continue
 
-                        print("--- INFO: Switched to conversation mode (base model)")
+                        print("--- INFO: Switched to conversation mode")
                         threading.Timer(0.5, self._say, args=["네, 반가워요. 말씀해주세요."]).start()
                         continue
                     else:
@@ -519,13 +563,18 @@ class VoiceAssistant:
                         self._current_mode = "conversation"
                     continue
             
-            # --- 대화 활성 모드 (base 모델) ---
+            # --- 대화 활성 모드 ---
             # 여기 도달했다는 것은 is_active() == True
             if self._current_mode != "conversation":
                 self._current_mode = "conversation"
                 
-            print("--- INFO: Conversation mode - Listening (base model)...")
+            print("--- INFO: Conversation mode - Listening...")
             utterance = self._listen_once()
+
+            # X 버튼 체크 (녹음 후)
+            if not self.is_active():
+                print("--- INFO: Conversation interrupted after recording")
+                continue
 
             if not utterance:
                 time.sleep(0.3)
@@ -536,8 +585,13 @@ class VoiceAssistant:
             # '종료' 명령어 (대기 모드로 전환)
             if any(exit_kw in utterance for exit_kw in self.exit_keywords):
                 self.go_to_standby()
-                self._current_mode = "wake"  # 다시 tiny 모드로
-                print("--- INFO: Switched back to wake mode (tiny model)")
+                self._current_mode = "wake"  # 다시 wake 모드로
+                print("--- INFO: Switched back to wake mode")
+                continue
+
+            # X 버튼 체크 (Gemini 호출 전)
+            if not self.is_active():
+                print("--- INFO: Conversation interrupted before Gemini")
                 continue
 
             # Gemini API 호출
@@ -552,6 +606,11 @@ class VoiceAssistant:
                 reply_text = getattr(resp, "text", None) or (resp.candidates[0].content.parts[0].text if getattr(resp, "candidates", None) else None)
             except Exception as e:  # pragma: no cover
                 self._last_error = f"Gemini error: {e}"
+
+            # X 버튼 체크 (TTS 호출 전)
+            if not self.is_active():
+                print("--- INFO: Conversation interrupted before TTS")
+                continue
 
             if not reply_text:
                 reply_text = "죄송해요, 방금은 잘 알아듣지 못했어요. 다시 말씀해 주세요."

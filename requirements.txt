@@ -15,9 +15,10 @@ faster-whisper
 sounddevice
 numpy
 
-# 음성 합성 (TTS - gTTS)
+# 음성 합성 (TTS)
 gTTS
 pydub
+edge-tts
 
 # Gemini AI API
 google-generativeai
