@@ -139,6 +139,7 @@ class VoiceAssistant:
         self._last_error: Optional[str] = None
         self._require_trigger: bool = True
         self._current_mode: str = "wake"  # "wake" or "conversation"
+        self._is_processing: bool = False  # Gemini/TTS 처리 중 플래그 (에코 방지)
         
         # 모델 로드
         self._models_loaded = load_whisper_models()
@@ -239,6 +240,7 @@ class VoiceAssistant:
                 "last_ai_text": self._last_ai_text,
                 "last_error": self._last_error,
                 "current_mode": self._current_mode,
+                "is_processing": self._is_processing,
                 "stt_ready": self._models_loaded,
                 "tts_ready": TTS_AVAILABLE,
                 "gemini_ready": bool(genai is not None),
@@ -395,6 +397,13 @@ class VoiceAssistant:
             self._last_error = "sounddevice is not installed."
             return None
 
+        # 처리 중이면 마이크 입력 받지 않음 (에코 방지)
+        while self._is_processing:
+            if not self.is_active():
+                return None
+            print("--- INFO: Processing in progress, waiting...")
+            time.sleep(0.1)
+
         try:
             print("--- INFO: Streaming mode - Waiting for speech...")
             
@@ -415,6 +424,11 @@ class VoiceAssistant:
                     # 대기 모드로 전환되었는지 체크 (X 버튼 눌림)
                     if not self.is_active():
                         print("--- INFO: Streaming interrupted - switched to standby")
+                        return None
+                    
+                    # 처리 중이면 녹음 중단 (에코 방지)
+                    if self._is_processing:
+                        print("--- INFO: Streaming interrupted - processing started")
                         return None
                     
                     # 청크 읽기
@@ -594,31 +608,42 @@ class VoiceAssistant:
                 print("--- INFO: Conversation interrupted before Gemini")
                 continue
 
-            # Gemini API 호출
-            with self._lock:
-                self._last_user_text = utterance
+            # 처리 시작 (마이크 뮤트)
+            self._is_processing = True
+            print("--- INFO: Processing started - microphone muted")
 
-            reply_text: Optional[str] = None
             try:
-                # 간결한 답변을 위한 프롬프트 구성
-                prompt = f"다음 대화에 대한 대답을 간결하게 대답해주세요.\n\n{utterance}"
-                resp = self._gemini_model.generate_content(prompt)
-                reply_text = getattr(resp, "text", None) or (resp.candidates[0].content.parts[0].text if getattr(resp, "candidates", None) else None)
-            except Exception as e:  # pragma: no cover
-                self._last_error = f"Gemini error: {e}"
+                # Gemini API 호출
+                with self._lock:
+                    self._last_user_text = utterance
 
-            # X 버튼 체크 (TTS 호출 전)
-            if not self.is_active():
-                print("--- INFO: Conversation interrupted before TTS")
-                continue
+                reply_text: Optional[str] = None
+                try:
+                    # 간결한 답변을 위한 프롬프트 구성
+                    prompt = f"다음 대화에 대한 대답을 간결하게 대답해주세요.\n\n{utterance}"
+                    resp = self._gemini_model.generate_content(prompt)
+                    reply_text = getattr(resp, "text", None) or (resp.candidates[0].content.parts[0].text if getattr(resp, "candidates", None) else None)
+                except Exception as e:  # pragma: no cover
+                    self._last_error = f"Gemini error: {e}"
 
-            if not reply_text:
-                reply_text = "죄송해요, 방금은 잘 알아듣지 못했어요. 다시 말씀해 주세요."
+                # X 버튼 체크 (TTS 호출 전)
+                if not self.is_active():
+                    print("--- INFO: Conversation interrupted before TTS")
+                    continue
 
-            with self._lock:
-                self._last_ai_text = reply_text
+                if not reply_text:
+                    reply_text = "죄송해요, 방금은 잘 알아듣지 못했어요. 다시 말씀해 주세요."
 
-            self._say(reply_text)
+                with self._lock:
+                    self._last_ai_text = reply_text
+
+                # TTS 재생 (마이크 뮤트 유지)
+                self._say(reply_text)
+                
+            finally:
+                # 처리 완료 (마이크 언뮤트)
+                self._is_processing = False
+                print("--- INFO: Processing finished - microphone active")
 
 
 _singleton: Optional[VoiceAssistant] = None
