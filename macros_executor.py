@@ -13,7 +13,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MACROS_PATH = os.path.join(BASE_DIR, "macros.json")
 
 # 모터 ID 매핑 가져오기
-from motor_config import MOTOR_ID_MAP
+from config import MOTOR_ID_MAP
 
 
 def resolve_motor_id(motor_id_value: Any) -> int:

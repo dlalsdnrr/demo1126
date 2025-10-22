@@ -8,8 +8,8 @@ from voice import voice_bp
 from daum_routes import daum_bp
 from macros_routes import macros_bp
 
-# 모터 ID 설정은 motor_config.py 파일에서 수정하세요!
-from motor_config import MOTOR_ID_MAP  # noqa: F401
+# 설정은 .env 파일에서 수정하세요!
+from config import MOTOR_ID_MAP  # noqa: F401
 
 
 app = Flask(__name__)

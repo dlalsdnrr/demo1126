@@ -1,8 +1,6 @@
 (() => {
   const POLL_MS = 2000;
-  // 여기에 원하는 게임 ID를 하드코딩하세요. 예) const HARDCODED_GAME_ID = '80099695';
-  const HARDCODED_GAME_ID = '80099695';
-  let currentGameId = HARDCODED_GAME_ID || null;
+  let currentGameId = null; // 서버 설정(.env)에서 로드됩니다.
   let lastPlayText = ''; // 이전 플레이 텍스트 저장용
 
   const el = {
@@ -176,9 +174,26 @@
       }
   }
 
+  // 서버 설정에서 게임 ID를 로드합니다.
+  async function loadConfig() {
+      try {
+          const res = await fetch('/api/config', { cache: 'no-store' });
+          if (res.ok) {
+              const data = await res.json();
+              if (data.ok && data.gameId) {
+                  currentGameId = data.gameId;
+                  console.log('게임 ID 로드됨:', currentGameId);
+              }
+          }
+      } catch (e) {
+          console.error('설정 로드 실패:', e);
+      }
+  }
+
   // 시작
-  window.addEventListener('DOMContentLoaded', () => {
-      tick();
+  window.addEventListener('DOMContentLoaded', async () => {
+      await loadConfig(); // 설정 먼저 로드
+      tick(); // 그 다음 게임 상태 폴링 시작
   });
 })();
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-import os
 import time
 
 try:
@@ -10,10 +9,7 @@ try:
 except Exception:  # pragma: no cover
     pyserial = None
 
-
-# 고정 COM 포트/보드레이트 (환경변수로 덮어쓰기 가능)
-PORT = os.getenv("SERIAL_PORT", "COM5")
-BAUDRATE = int(os.getenv("SERIAL_BAUD", "115200"))
+from config import SERIAL_PORT as PORT, SERIAL_BAUD as BAUDRATE
 
 # 전역 시리얼 핸들 (필요 시 열기)
 ser = None

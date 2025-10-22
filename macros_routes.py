@@ -7,7 +7,7 @@ from typing import List, Dict, Any
 
 from flask import Blueprint, jsonify, request, render_template
 from macros_executor import run_macro_by_name_async, run_macro_by_event_text_async, run_macro_by_name_blocking
-from motor_config import MOTOR_ID_MAP
+from config import MOTOR_ID_MAP
 
 try:
     from serial_api import _send_command

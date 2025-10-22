@@ -6,6 +6,7 @@ import time
 from typing import Optional, Dict, Any
 
 from flask import Blueprint, jsonify, request
+from config import GEMINI_API_KEY as DEFAULT_GEMINI_API_KEY
 
 # --- STT (Faster Whisper) 및 오디오 입력 (sounddevice) ---
 try:
@@ -120,7 +121,7 @@ class VoiceAssistant:
 
             if model_name:
                 self._model_name = model_name
-            self._gemini_api_key = api_key or os.getenv("GEMINI_API_KEY")
+            self._gemini_api_key = api_key or DEFAULT_GEMINI_API_KEY
 
             self._thread = threading.Thread(target=self._listen_loop, name="VoiceAssistantThread", daemon=True)
             self._thread.start()

@@ -6,6 +6,7 @@ from typing import Dict, Any
 
 from flask import Blueprint, jsonify, render_template, request
 from macros_executor import run_macro_by_event_text_async, last_event_to_trigger_text
+from config import BASEBALL_ID
 
 
 game_bp = Blueprint("game", __name__)
@@ -182,5 +183,11 @@ def api_reset():
     with lock:
         game_state = _initial_game_state()
     return jsonify({"ok": True})
+
+
+@game_bp.route("/api/config")
+def api_config():
+    """클라이언트에서 사용할 설정값을 반환합니다."""
+    return jsonify({"ok": True, "gameId": BASEBALL_ID or ""})
 
 
