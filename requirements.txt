@@ -20,8 +20,8 @@ gTTS
 pydub
 edge-tts
 
-# Gemini AI API
-google-generativeai
+# 날씨 API
+requests
 
 # VAD (Voice Activity Detection)
 webrtcvad

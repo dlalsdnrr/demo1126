@@ -7,12 +7,14 @@ from typing import Optional, Dict, Any
 
 from flask import Blueprint, jsonify, request
 from config import (
-    GEMINI_API_KEY as DEFAULT_GEMINI_API_KEY,
+    WEATHER_API_KEY,
     VOICE_CONV_MODEL,
     VAD_AGGRESSIVENESS,
     SILENCE_THRESHOLD as CONFIG_SILENCE_THRESHOLD,
     SILENCE_DURATION as CONFIG_SILENCE_DURATION
 )
+import requests
+from datetime import datetime
 
 # --- STT (Faster Whisper) 및 오디오 입력 (sounddevice) ---
 try:
@@ -53,11 +55,14 @@ except Exception: # pragma: no cover
         TTS_AVAILABLE = False
         print("Warning: TTS not available. Install edge-tts or gTTS.")
 
-# --- Gemini API ---
-try:
-    import google.generativeai as genai  # Gemini API
-except Exception:  # pragma: no cover
-    genai = None
+# --- 게임 상태 가져오기 ---
+def get_game_state():
+    """현재 게임 상태를 가져옵니다."""
+    try:
+        from game_routes import game_state
+        return game_state
+    except:
+        return None
 
 # --- VAD (Voice Activity Detection) ---
 try:
@@ -109,10 +114,8 @@ class VoiceAssistant:
     def __init__(
         self,
         trigger_phrase: str = "안녕",
-        default_model_name: str = "gemini-2.5-flash",
     ) -> None:
         self.trigger_phrase = trigger_phrase
-        self.default_model_name = default_model_name
 
         # "안녕" 관련 키워드 목록
         self.trigger_keywords = ["안녕", "안뇽", "아니요", "안냥", "하이"]
@@ -130,10 +133,6 @@ class VoiceAssistant:
 
         self._tts_file_path = "tts_output.mp3" # 임시 파일 경로
         self._gtts_lang = "ko" # 한국어
-        self._mic = None
-        self._gemini_model = None
-        self._gemini_api_key: Optional[str] = None
-        self._model_name: str = self.default_model_name
         self._last_user_text: Optional[str] = None
         self._last_ai_text: Optional[str] = None
         self._last_error: Optional[str] = None
@@ -157,7 +156,7 @@ class VoiceAssistant:
             self._vad_enabled = False
 
 
-    def start(self, api_key: Optional[str] = None, model_name: Optional[str] = None, require_trigger: Optional[bool] = True) -> None:
+    def start(self, api_key: Optional[str] = None, require_trigger: Optional[bool] = True) -> None:
         with self._lock:
             # 1. 스레드가 이미 실행 중인 경우 (대기 모드에서 활성화)
             if self._running:
@@ -178,10 +177,6 @@ class VoiceAssistant:
 
             if not self._require_trigger:
                 self._active_conversation = True
-
-            if model_name:
-                self._model_name = model_name
-            self._gemini_api_key = api_key or DEFAULT_GEMINI_API_KEY
 
             self._thread = threading.Thread(target=self._listen_loop, name="VoiceAssistantThread", daemon=True)
             self._thread.start()
@@ -232,7 +227,6 @@ class VoiceAssistant:
             return {
                 "running": self._running,
                 "active": self._active_conversation,
-                "model": self._model_name,
                 "trigger": self.trigger_phrase,
                 "trigger_keywords": self.trigger_keywords,
                 "exit_keywords": self.exit_keywords,
@@ -243,7 +237,6 @@ class VoiceAssistant:
                 "is_processing": self._is_processing,
                 "stt_ready": self._models_loaded,
                 "tts_ready": TTS_AVAILABLE,
-                "gemini_ready": bool(genai is not None),
                 "vad_enabled": self._vad_enabled,
             }
 
@@ -252,20 +245,105 @@ class VoiceAssistant:
             self.trigger_phrase = phrase
 
 
-    def _ensure_gemini_model(self) -> None:
-        if self._gemini_model is not None:
-            return
-        if genai is None:
-            self._last_error = "google-generativeai not installed"
-            return
-        if not self._gemini_api_key:
-            self._last_error = "GEMINI_API_KEY not set"
-            return
+    def _get_weather_info(self) -> str:
+        """날씨 정보를 가져옵니다."""
+        if not WEATHER_API_KEY:
+            return "날씨 API 키가 설정되지 않았습니다."
+        
         try:
-            genai.configure(api_key=self._gemini_api_key)
-            self._gemini_model = genai.GenerativeModel(self._model_name)
-        except Exception as e:  # pragma: no cover
-            self._last_error = f"Gemini init failed: {e}"
+            # OpenWeatherMap API 사용 (서울 기준)
+            url = f"http://api.openweathermap.org/data/2.5/forecast?q=Seoul,kr&appid={WEATHER_API_KEY}&units=metric&lang=kr"
+            response = requests.get(url, timeout=3)
+            
+            if response.status_code != 200:
+                return "날씨 정보를 가져올 수 없습니다."
+            
+            data = response.json()
+            
+            # 현재 날씨
+            current = data['list'][0]
+            temp = current['main']['temp']
+            description = current['weather'][0]['description']
+            
+            # 비 예보 확인 (다음 24시간)
+            rain_forecast = []
+            for item in data['list'][:8]:  # 3시간 간격 8개 = 24시간
+                if 'rain' in item['weather'][0]['main'].lower():
+                    time_str = datetime.fromtimestamp(item['dt']).strftime('%H시')
+                    rain_forecast.append(time_str)
+            
+            result = f"현재 기온은 {temp:.1f}도이고, {description} 날씨입니다."
+            if rain_forecast:
+                result += f" 오늘 {', '.join(rain_forecast[:3])}에 비가 올 예정입니다."
+            else:
+                result += " 오늘은 비 소식이 없습니다."
+            
+            return result
+        except Exception as e:
+            print(f"--- ERROR: Weather API failed: {e}")
+            return "날씨 정보를 가져오는데 실패했습니다."
+    
+    def _get_game_info(self) -> str:
+        """게임 상황을 설명합니다."""
+        game = get_game_state()
+        if not game:
+            return "현재 게임 정보를 가져올 수 없습니다."
+        
+        away_team = game['teams']['away']['name']
+        home_team = game['teams']['home']['name']
+        away_runs = game['teams']['away']['runs']
+        home_runs = game['teams']['home']['runs']
+        inning = game['inning']
+        half = "초" if game['half'] == 'T' else "말"
+        balls = game['count']['balls']
+        strikes = game['count']['strikes']
+        outs = game['count']['outs']
+        
+        # 점수 상황
+        if away_runs > home_runs:
+            score_info = f"{away_team}가 {away_runs}대 {home_runs}으로 앞서고 있습니다."
+        elif home_runs > away_runs:
+            score_info = f"{home_team}가 {home_runs}대 {away_runs}으로 앞서고 있습니다."
+        else:
+            score_info = f"현재 {away_runs}대 {home_runs} 동점입니다."
+        
+        # 상황 설명
+        situation = f"현재 {inning}회 {half}, {score_info}"
+        situation += f" {balls}볼 {strikes}스트라이크 {outs}아웃 상황입니다."
+        
+        # 주자 상황
+        bases = game['bases']
+        runners = []
+        if bases.get('first'): runners.append("1루")
+        if bases.get('second'): runners.append("2루")
+        if bases.get('third'): runners.append("3루")
+        
+        if runners:
+            situation += f" {', '.join(runners)}에 주자가 있습니다."
+        
+        return situation
+    
+    def _generate_response(self, user_text: str) -> str:
+        """사용자 질문에 대한 응답을 생성합니다."""
+        text = user_text.lower()
+        
+        # 날씨 관련 질문
+        weather_keywords = ["날씨", "비", "기온", "온도", "날", "덥", "춥"]
+        if any(kw in text for kw in weather_keywords):
+            return self._get_weather_info()
+        
+        # 게임 상황 질문
+        game_keywords = ["경기", "게임", "점수", "이닝", "스코어", "누가", "이기", "지고", "상황", "야구"]
+        if any(kw in text for kw in game_keywords):
+            return self._get_game_info()
+        
+        # 인사
+        greeting_keywords = ["안녕", "하이", "반가", "헬로"]
+        if any(kw in text for kw in greeting_keywords):
+            return "네, 무엇을 도와드릴까요? 날씨나 경기 상황을 물어보세요."
+        
+        # 기본 응답
+        return "죄송합니다. 날씨나 경기 상황에 대해서만 답변할 수 있습니다."
 
     def _say(self, text: str) -> None:
         if not text:
@@ -528,8 +606,6 @@ class VoiceAssistant:
 
     def _listen_loop(self) -> None:
         """하이브리드 모델을 사용한 메인 루프"""
-        self._ensure_gemini_model()
-
         while not self._stop_event.is_set():
             if not self._models_loaded or sd is None:
                 time.sleep(1.0)
@@ -557,13 +633,6 @@ class VoiceAssistant:
                             self._active_conversation = True
                             self._current_mode = "conversation"  # base 모델로 전환
                             self._last_user_text = utterance
-
-                        if self._gemini_model is None:
-                            self._say("Gemini 설정에 문제가 있습니다. API 키를 확인해주세요.")
-                            with self._lock:
-                                self._active_conversation = False
-                                self._current_mode = "wake"
-                            continue
 
                         print("--- INFO: Switched to conversation mode")
                         threading.Timer(0.5, self._say, args=["네, 반가워요. 말씀해주세요."]).start()
@@ -613,26 +682,16 @@ class VoiceAssistant:
             print("--- INFO: Processing started - microphone muted")
 
             try:
-                # Gemini API 호출
+                # 응답 생성
                 with self._lock:
                     self._last_user_text = utterance
 
-                reply_text: Optional[str] = None
-                try:
-                    # 간결한 답변을 위한 프롬프트 구성
-                    prompt = f"다음 대화에 대한 대답을 간결하게 대답해주세요.\n\n{utterance}"
-                    resp = self._gemini_model.generate_content(prompt)
-                    reply_text = getattr(resp, "text", None) or (resp.candidates[0].content.parts[0].text if getattr(resp, "candidates", None) else None)
-                except Exception as e:  # pragma: no cover
-                    self._last_error = f"Gemini error: {e}"
+                reply_text = self._generate_response(utterance)
 
                 # X 버튼 체크 (TTS 호출 전)
                 if not self.is_active():
                     print("--- INFO: Conversation interrupted before TTS")
                     continue
-
-                if not reply_text:
-                    reply_text = "죄송해요, 방금은 잘 알아듣지 못했어요. 다시 말씀해 주세요."
 
                 with self._lock:
                     self._last_ai_text = reply_text
@@ -669,10 +728,8 @@ def api_voice_status():
 def api_voice_start():
     va = get_assistant()
     data = request.get_json(silent=True) or {}
-    api_key = data.get("apiKey")
-    model = data.get("model")
     require_trigger = data.get("requireTrigger", True) # None이 넘어오면 True
-    va.start(api_key=api_key, model_name=model, require_trigger=require_trigger)
+    va.start(require_trigger=require_trigger)
     return jsonify({"ok": True, "status": va.status()})
 
 
