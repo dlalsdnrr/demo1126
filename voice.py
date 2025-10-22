@@ -9,8 +9,10 @@ from flask import Blueprint, jsonify, request
 from config import (
     GEMINI_API_KEY as DEFAULT_GEMINI_API_KEY,
     VOICE_WAKE_MODEL,
-    VOICE_CONVERSATION_MODEL,
-    VAD_AGGRESSIVENESS
+    VOICE_CONV_MODEL,
+    VAD_AGGRESSIVENESS,
+    SILENCE_THRESHOLD as CONFIG_SILENCE_THRESHOLD,
+    SILENCE_DURATION as CONFIG_SILENCE_DURATION
 )
 
 # --- STT (Faster Whisper) 및 오디오 입력 (sounddevice) ---
@@ -61,6 +63,12 @@ SAMPLE_RATE = 16000
 WHISPER_WAKE_MODEL = None      # tiny 모델 (트리거 감지용)
 WHISPER_CONV_MODEL = None      # base 모델 (대화용)
 
+# --- 실시간 VAD 설정 ---
+CHUNK_DURATION_MS = 30         # 30ms 청크
+CHUNK_SIZE = int(SAMPLE_RATE * CHUNK_DURATION_MS / 1000)
+SILENCE_THRESHOLD = CONFIG_SILENCE_THRESHOLD    # 에너지 임계값 (RMS)
+SILENCE_DURATION = CONFIG_SILENCE_DURATION      # 무음 감지 시간 (초)
+
 def load_whisper_models():
     """하이브리드 Whisper 모델을 로드하는 함수"""
     global WHISPER_WAKE_MODEL, WHISPER_CONV_MODEL
@@ -82,14 +90,14 @@ def load_whisper_models():
         
         # 2. Conversation 모델 (base) - 대화용
         if WHISPER_CONV_MODEL is None:
-            print(f"--- INFO: Loading conversation model ({VOICE_CONVERSATION_MODEL})...")
+            print(f"--- INFO: Loading conversation model ({VOICE_CONV_MODEL})...")
             WHISPER_CONV_MODEL = WhisperModel(
-                VOICE_CONVERSATION_MODEL,
+                VOICE_CONV_MODEL,
                 device="cpu",
                 compute_type="int8",
                 cpu_threads=4
             )
-            print(f"--- INFO: Conversation model ({VOICE_CONVERSATION_MODEL}) loaded successfully.")
+            print(f"--- INFO: Conversation model ({VOICE_CONV_MODEL}) loaded successfully.")
         
         return True
     except Exception as e:
@@ -101,7 +109,7 @@ class VoiceAssistant:
     def __init__(
         self,
         trigger_phrase: str = "안녕",
-        default_model_name: str = "gemini-1.5-flash",
+        default_model_name: str = "gemini-2.5-flash",
     ) -> None:
         self.trigger_phrase = trigger_phrase
         self.default_model_name = default_model_name
@@ -206,6 +214,7 @@ class VoiceAssistant:
                     ).start()
 
                 self._active_conversation = False
+                self._current_mode = "wake"  # 즉시 wake 모드로 전환
                 self._require_trigger = True # "안녕"을 다시 기다리도록 설정
                 print("--- INFO: Assistant set to standby mode (waiting for trigger).")
 
@@ -290,18 +299,22 @@ class VoiceAssistant:
                 except Exception:
                     pass
 
+    def _calculate_rms(self, audio_chunk: np.ndarray) -> float:
+        """오디오 청크의 RMS(Root Mean Square) 에너지 계산"""
+        return np.sqrt(np.mean(audio_chunk ** 2)) * 32768.0
+
     def _record_audio(self) -> Optional[np.ndarray]:
-        """현재 모드에 맞는 시간으로 녹음"""
+        """현재 모드에 맞는 시간으로 녹음 (Wake 모드 전용)"""
         if sd is None:
             self._last_error = "sounddevice is not installed."
             return None
 
-        # Wake 모드: 2초, Conversation 모드: 4초
-        record_seconds = 2.0 if self._current_mode == "wake" else 4.0
+        # Wake 모드에서만 사용 (2초 고정)
+        record_seconds = 2.0
 
         try:
             device_info = sd.query_devices(RESPEAKER_INDEX, 'input')
-            print(f"--- INFO: Recording ({self._current_mode} mode, {record_seconds}s) using device: {device_info['name']}")
+            print(f"--- INFO: Recording (wake mode, {record_seconds}s) using device: {device_info['name']}")
             audio = sd.rec(int(record_seconds * SAMPLE_RATE),
                            samplerate=SAMPLE_RATE, channels=1, dtype='int16',
                            device=RESPEAKER_INDEX)
@@ -310,7 +323,7 @@ class VoiceAssistant:
             audio_float = audio.squeeze().astype(np.float32) / 32768.0
             
             # Wake 모드에서 VAD로 무음 체크
-            if self._current_mode == "wake" and self._vad_enabled:
+            if self._vad_enabled and self._vad is not None:
                 audio_bytes = audio.tobytes()
                 chunk_duration_ms = 30  # 30ms 청크
                 chunk_size = int(SAMPLE_RATE * chunk_duration_ms / 1000) * 2  # 2 bytes per sample
@@ -333,6 +346,83 @@ class VoiceAssistant:
         except Exception as e:
             self._last_error = f"Audio record failed: {e}"
             print(f"--- ERROR: Audio record failed: {e}")
+            return None
+
+    def _record_streaming_with_vad(self) -> Optional[np.ndarray]:
+        """실시간 스트리밍 방식으로 음성 구간만 녹음 (Conversation 모드 전용)"""
+        if sd is None or np is None:
+            self._last_error = "sounddevice is not installed."
+            return None
+
+        try:
+            print("--- INFO: Streaming mode - Waiting for speech...")
+            
+            audio_buffer = []
+            is_speaking = False
+            silence_chunks = 0
+            max_silence_chunks = int(SILENCE_DURATION * SAMPLE_RATE / CHUNK_SIZE)  # 1초 = ~33 청크
+            
+            # 스트림 시작
+            with sd.InputStream(
+                samplerate=SAMPLE_RATE,
+                channels=1,
+                dtype='int16',
+                device=RESPEAKER_INDEX,
+                blocksize=CHUNK_SIZE
+            ) as stream:
+                while True:
+                    # 대기 모드로 전환되었는지 체크 (X 버튼 눌림)
+                    if not self.is_active():
+                        print("--- INFO: Streaming interrupted - switched to standby")
+                        return None
+                    
+                    # 청크 읽기
+                    chunk, overflowed = stream.read(CHUNK_SIZE)
+                    if overflowed:
+                        print("--- WARNING: Audio buffer overflow")
+                    
+                    chunk_float = chunk.squeeze().astype(np.float32) / 32768.0
+                    rms = self._calculate_rms(chunk_float)
+                    
+                    # 음성 감지
+                    if rms > SILENCE_THRESHOLD:
+                        if not is_speaking:
+                            print(f"--- INFO: Speech detected (RMS: {rms:.0f})")
+                            is_speaking = True
+                        
+                        audio_buffer.append(chunk_float)
+                        silence_chunks = 0
+                    else:
+                        # 무음 구간
+                        if is_speaking:
+                            audio_buffer.append(chunk_float)
+                            silence_chunks += 1
+                            
+                            # 1초 이상 무음이면 종료
+                            if silence_chunks >= max_silence_chunks:
+                                print(f"--- INFO: Silence detected for {SILENCE_DURATION}s, ending speech")
+                                break
+                        else:
+                            # 아직 말을 시작하지 않음 - 최대 10초 대기
+                            if len(audio_buffer) > (10 * SAMPLE_RATE / CHUNK_SIZE):
+                                print("--- INFO: No speech detected in 10s, timeout")
+                                return None
+                            audio_buffer.append(chunk_float)
+            
+            # 버퍼가 비어있으면 None
+            if not audio_buffer or not is_speaking:
+                return None
+            
+            # 버퍼를 단일 배열로 결합
+            result = np.concatenate(audio_buffer)
+            duration = len(result) / SAMPLE_RATE
+            print(f"--- INFO: Captured {duration:.2f}s of speech")
+            
+            return result
+            
+        except Exception as e:
+            self._last_error = f"Streaming audio record failed: {e}"
+            print(f"--- ERROR: Streaming audio record failed: {e}")
             return None
 
     def _transcribe(self, audio: np.ndarray) -> Optional[str]:
@@ -366,7 +456,14 @@ class VoiceAssistant:
             return None
 
     def _listen_once(self, timeout: Optional[float] = None, phrase_time_limit: Optional[float] = None) -> Optional[str]:
-        audio = self._record_audio()
+        """현재 모드에 맞는 방식으로 녹음 및 transcribe"""
+        # Conversation 모드: 스트리밍 방식
+        if self._current_mode == "conversation":
+            audio = self._record_streaming_with_vad()
+        # Wake 모드: 고정 2초 방식
+        else:
+            audio = self._record_audio()
+        
         if audio is None:
             return None
         return self._transcribe(audio)
@@ -421,9 +518,12 @@ class VoiceAssistant:
                         self._active_conversation = True
                         self._current_mode = "conversation"
                     continue
-
+            
             # --- 대화 활성 모드 (base 모델) ---
-            self._current_mode = "conversation"  # base 모델 사용
+            # 여기 도달했다는 것은 is_active() == True
+            if self._current_mode != "conversation":
+                self._current_mode = "conversation"
+                
             print("--- INFO: Conversation mode - Listening (base model)...")
             utterance = self._listen_once()
 
@@ -446,7 +546,9 @@ class VoiceAssistant:
 
             reply_text: Optional[str] = None
             try:
-                resp = self._gemini_model.generate_content(utterance)
+                # 간결한 답변을 위한 프롬프트 구성
+                prompt = f"다음 대화에 대한 대답을 간결하게 대답해주세요.\n\n{utterance}"
+                resp = self._gemini_model.generate_content(prompt)
                 reply_text = getattr(resp, "text", None) or (resp.candidates[0].content.parts[0].text if getattr(resp, "candidates", None) else None)
             except Exception as e:  # pragma: no cover
                 self._last_error = f"Gemini error: {e}"
