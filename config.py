@@ -27,7 +27,7 @@ VAD_AGGRESSIVENESS = 2             # 0~3 (높을수록 민감)
 WAKE_WORD_CONFIDENCE = 0.3         # 트리거 민감도
 
 # 실시간 스트리밍 VAD 설정
-SILENCE_THRESHOLD = int(os.getenv("SILENCE_THRESHOLD", "500"))  # 음성 감지 임계값 (RMS)
+SILENCE_THRESHOLD = int(os.getenv("SILENCE_THRESHOLD", "300"))  # 음성 감지 임계값 (RMS)
 SILENCE_DURATION = float(os.getenv("SILENCE_DURATION", "1.0"))  # 무음 판정 시간 (초)
 
 # BLDC I2C 설정 (라즈베리파이에서 아두이노로)
