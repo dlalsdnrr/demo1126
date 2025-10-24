@@ -26,3 +26,5 @@ requests
 # VAD (Voice Activity Detection)
 webrtcvad
 
+smbus2>=0.4.3
+

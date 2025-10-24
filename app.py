@@ -7,10 +7,9 @@ from serial_api import serial_bp
 from voice import voice_bp
 from daum_routes import daum_bp
 from macros_routes import macros_bp
+from bldc_routes import bldc_bp
 
-# 설정은 .env 파일에서 수정하세요!
-from config import MOTOR_ID_MAP  # noqa: F401
-
+from config import MOTOR_ID_MAP
 
 app = Flask(__name__)
 
@@ -20,7 +19,7 @@ app.register_blueprint(serial_bp)
 app.register_blueprint(voice_bp)
 app.register_blueprint(daum_bp)
 app.register_blueprint(macros_bp)
-
+app.register_blueprint(bldc_bp)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8484, debug=True)

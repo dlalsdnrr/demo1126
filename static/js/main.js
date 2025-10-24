@@ -330,3 +330,38 @@ function initVoiceButton() {
 }
 
 window.addEventListener('DOMContentLoaded', initVoiceButton);
+
+// --- BLDC Panel Logic ---
+function initBLDCPanel() {
+  const btn = document.getElementById('bldc-btn');
+  const panel = document.getElementById('bldc-panel');
+  const closeBtn = document.getElementById('bldc-close');
+
+  async function postJSON(url, body) {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return await res.json();
+  }
+
+  async function onClickCommand(e) {
+    const el = e.target.closest('[data-cmd]');
+    if (!el) return;
+    const cmd = el.getAttribute('data-cmd');
+    try {
+      const data = await postJSON('/api/bldc/command', { command: cmd });
+      if (!data.ok) alert('전송 실패: ' + (data.error || ''));
+    } catch (err) {
+      alert('전송 오류: ' + err);
+    }
+  }
+
+  if (btn && panel) {
+    btn.addEventListener('click', () => {
+      panel.classList.toggle('open');
+    });
+  }
+  if (closeBtn) closeBtn.addEventListener('click', () => panel.classList.remove('open'));
+
+  if (panel) panel.addEventListener('click', onClickCommand);
+}
+
+window.addEventListener('DOMContentLoaded', initBLDCPanel);

@@ -16,6 +16,9 @@
         <button class="serial-btn" id="serial-btn" title="시리얼 포트">
           🔌
         </button>
+        <button class="serial-btn" id="bldc-btn" title="BLDC 제어" style="margin-left:6px;">
+          🚗
+        </button>
       </div>
     </div>
     <main class="container">
@@ -50,6 +53,25 @@
         <div class="serial-buttons">
           <button id="serial-send">테스트 전송</button>
           <button id="serial-macros">매크로</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BLDC 패널 -->
+    <div class="bldc-panel" id="bldc-panel">
+      <div class="bldc-panel-header">
+        <div>BLDC 제어</div>
+        <button id="bldc-close">✕</button>
+      </div>
+      <div class="bldc-panel-body">
+        <div class="bldc-grid">
+          <button class="bldc-btn" data-cmd="front">⬆ 앞</button>
+          <div class="bldc-spacer"></div>
+          <button class="bldc-btn" data-cmd="right">➡ 우</button>
+          <button class="bldc-btn" data-cmd="left">⬅ 좌</button>
+          <div class="bldc-spacer"></div>
+          <button class="bldc-btn" data-cmd="back">⬇ 뒤</button>
+          <button class="bldc-stop" data-cmd="stop">■ 정지</button>
         </div>
       </div>
     </div>
