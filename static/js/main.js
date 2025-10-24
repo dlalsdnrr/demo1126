@@ -342,26 +342,135 @@ function initBLDCPanel() {
     return await res.json();
   }
 
-  async function onClickCommand(e) {
-    const el = e.target.closest('[data-cmd]');
-    if (!el) return;
-    const cmd = el.getAttribute('data-cmd');
+  let holdTimer = null;
+  let holdCmd = null;
+  let sending = false;
+
+  async function sendCommand(cmd) {
+    if (sending) return; // 간단한 동시 전송 방지
+    sending = true;
     try {
       const data = await postJSON('/api/bldc/command', { command: cmd });
-      if (!data.ok) alert('전송 실패: ' + (data.error || ''));
+      if (!data.ok) console.warn('전송 실패:', data.error);
     } catch (err) {
-      alert('전송 오류: ' + err);
+      console.warn('전송 오류:', err);
+    } finally {
+      sending = false;
     }
+  }
+
+  function startHold(cmd) {
+    if (!cmd) return;
+    if (holdCmd === cmd && holdTimer) return;
+    stopHold(true);
+    holdCmd = cmd;
+    // 즉시 한 번 전송 후 주기 전송 (아두이노 200ms 타임아웃 대비)
+    sendCommand(cmd);
+    holdTimer = setInterval(() => sendCommand(cmd), 150);
+  }
+
+  function stopHold(silent) {
+    if (holdTimer) {
+      clearInterval(holdTimer);
+      holdTimer = null;
+    }
+    const hadCmd = !!holdCmd;
+    holdCmd = null;
+    if (!silent && hadCmd) {
+      sendCommand('stop');
+    }
+  }
+
+  function onPointerDown(e) {
+    const el = e.target.closest('[data-cmd]');
+    if (!el || !panel || !panel.contains(el)) return;
+    e.preventDefault();
+    const cmd = el.getAttribute('data-cmd');
+    if (cmd === 'stop') {
+      stopHold(true);
+      sendCommand('stop');
+      return;
+    }
+    startHold(cmd);
+  }
+
+  function onPointerUp() {
+    stopHold(false);
   }
 
   if (btn && panel) {
     btn.addEventListener('click', () => {
-      panel.classList.toggle('open');
+      if (!panel.classList.contains('open')) {
+        panel.classList.add('open');
+      } else {
+        stopHold(false);
+        panel.classList.remove('open');
+      }
     });
   }
-  if (closeBtn) closeBtn.addEventListener('click', () => panel.classList.remove('open'));
+  if (closeBtn) closeBtn.addEventListener('click', () => { stopHold(false); panel.classList.remove('open'); });
 
-  if (panel) panel.addEventListener('click', onClickCommand);
+  if (panel) {
+    panel.addEventListener('pointerdown', onPointerDown);
+  }
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', () => stopHold(false));
+  window.addEventListener('blur', () => stopHold(false));
 }
 
 window.addEventListener('DOMContentLoaded', initBLDCPanel);
+
+// --- BLE Panel Logic ---
+function initBLEPanel() {
+  const btn = document.getElementById('ble-btn');
+  const panel = document.getElementById('ble-panel');
+  const closeBtn = document.getElementById('ble-close');
+  const el = {
+    mode: document.getElementById('ble-mode'),
+    running: document.getElementById('ble-running'),
+    adv: document.getElementById('ble-adv'),
+    last: document.getElementById('ble-last'),
+    start: document.getElementById('ble-start'),
+    stop: document.getElementById('ble-stop'),
+    refresh: document.getElementById('ble-refresh'),
+    msg: document.getElementById('ble-msg'),
+    send: document.getElementById('ble-send'),
+  };
+
+  function setPanelOpen(open) {
+    if (!panel) return;
+    panel.classList.toggle('open', open);
+  }
+
+  async function getJSON(url, options) {
+    const res = await fetch(url, { cache: 'no-store', ...options });
+    return await res.json();
+  }
+  async function postJSON(url, body) {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+    return await res.json();
+  }
+
+  async function refresh() {
+    try {
+      const data = await getJSON('/api/ble/status');
+      if (data && data.ok) {
+        if (el.mode) el.mode.textContent = data.mode || '-';
+        if (el.running) el.running.textContent = data.running ? 'ON' : 'OFF';
+        if (el.adv) el.adv.textContent = data.advertising ? 'ON' : 'OFF';
+        if (el.last) el.last.textContent = data.last_received || '';
+      }
+    } catch (e) {
+      console.warn('BLE status error', e);
+    }
+  }
+
+  if (btn) btn.addEventListener('click', async () => { setPanelOpen(!panel.classList.contains('open')); if (panel.classList.contains('open')) await refresh(); });
+  if (closeBtn) closeBtn.addEventListener('click', () => setPanelOpen(false));
+  if (el.refresh) el.refresh.addEventListener('click', refresh);
+  if (el.start) el.start.addEventListener('click', async () => { const r = await postJSON('/api/ble/start'); if (!r.ok) alert('시작 실패'); else refresh(); });
+  if (el.stop) el.stop.addEventListener('click', async () => { const r = await postJSON('/api/ble/stop'); if (!r.ok) alert('중지 실패'); else refresh(); });
+  if (el.send) el.send.addEventListener('click', async () => { const msg = (el.msg && el.msg.value || '').trim(); if (!msg) return; const r = await postJSON('/api/ble/simulate-write', { message: msg }); if (!r.ok) alert('전송 실패'); else refresh(); });
+}
+
+window.addEventListener('DOMContentLoaded', initBLEPanel);

@@ -369,3 +369,17 @@ body {
   background: linear-gradient(180deg, #e63946, #b51728);
   border-color: #e63946;
 }
+
+/* BLE panel */
+.ble-panel { position: fixed; top: 48px; right: 8px; width: 420px; max-height: calc(100vh - 64px); overflow: auto; background: var(--panel); border: 1px solid #5a6570; border-radius: 10px; padding: 14px; z-index: 1200; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+.ble-panel.open { display: block; }
+.ble-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 600; }
+.ble-panel-header button { background: transparent; color: var(--text); border: 0; cursor: pointer; font-size: 18px; padding: 4px; opacity: 0.7; transition: opacity 0.2s; }
+.ble-panel-header button:hover { opacity: 1; }
+.ble-panel-body { display: grid; gap: 12px; }
+.ble-status { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.ble-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.ble-actions button { background: linear-gradient(180deg, #1f7dd8, #165aa1); border: 1px solid #2b6cb0; color: #fff; border-radius: 6px; padding: 10px 16px; cursor: pointer; font-weight: 600; }
+.ble-send { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.ble-send input { background: #4a5568; color: #fff; border: 1px solid #5a6570; border-radius: 6px; padding: 8px 10px; }
+.ble-send button { background: #4a5568; border: 1px solid #5a6570; color: #fff; border-radius: 6px; padding: 10px 16px; cursor: pointer; }

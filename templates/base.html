@@ -19,6 +19,9 @@
         <button class="serial-btn" id="bldc-btn" title="BLDC 제어" style="margin-left:6px;">
           🚗
         </button>
+        <button class="serial-btn" id="ble-btn" title="BLE 브릿지" style="margin-left:6px;">
+          📡
+        </button>
       </div>
     </div>
     <main class="container">
@@ -72,6 +75,31 @@
           <div class="bldc-spacer"></div>
           <button class="bldc-btn" data-cmd="back">⬇ 뒤</button>
           <button class="bldc-stop" data-cmd="stop">■ 정지</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BLE 패널 -->
+    <div class="ble-panel" id="ble-panel">
+      <div class="ble-panel-header">
+        <div>BLE 브릿지</div>
+        <button id="ble-close">✕</button>
+      </div>
+      <div class="ble-panel-body">
+        <div class="ble-status" id="ble-status">
+          <div>모드: <span id="ble-mode">-</span></div>
+          <div>실행: <span id="ble-running">-</span></div>
+          <div>광고: <span id="ble-adv">-</span></div>
+          <div>최근 수신: <span id="ble-last">-</span></div>
+        </div>
+        <div class="ble-actions">
+          <button id="ble-start">시작</button>
+          <button id="ble-stop">중지</button>
+          <button id="ble-refresh">새로고침</button>
+        </div>
+        <div class="ble-send">
+          <input id="ble-msg" type="text" placeholder="안드로이드→메시지 시뮬레이트" />
+          <button id="ble-send">전송(모의)</button>
         </div>
       </div>
     </div>

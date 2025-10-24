@@ -8,6 +8,7 @@ from voice import voice_bp
 from daum_routes import daum_bp
 from macros_routes import macros_bp
 from bldc_routes import bldc_bp
+from ble_routes import ble_bp
 
 from config import MOTOR_ID_MAP
 
@@ -20,6 +21,7 @@ app.register_blueprint(voice_bp)
 app.register_blueprint(daum_bp)
 app.register_blueprint(macros_bp)
 app.register_blueprint(bldc_bp)
+app.register_blueprint(ble_bp)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8484, debug=True)

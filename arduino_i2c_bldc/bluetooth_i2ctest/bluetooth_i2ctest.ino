@@ -14,6 +14,14 @@ String command = "";
 
 int motorSpeed = 50; // 모터 속도 (0~255)
 
+// 브레이크 설정: 역토크 유지 시간 및 강도
+const int BRAKE_PWM = 200;   // 브레이크 시 인가할 PWM (역토크)
+const int BRAKE_MS  = 150;   // 역토크 유지 시간(ms)
+
+// 마지막 구동 명령 추적 (브레이크 방향 결정을 위함)
+// 0: none, 1: front, 2: back, 3: left, 4: right
+volatile int lastCommand = 0;
+
 // ===================================================
 // 🔹 센서 관련 변수
 // ===================================================
@@ -157,6 +165,8 @@ void receiveEvent(int howMany) {
     turnRight();
   } else if (command == "back") {
     moveBackward();
+  } else if (command == "stop") { // stop = brake
+    applyBrake();
   } else {
     stopMotors();
   }
@@ -171,6 +181,7 @@ void moveForward() {
   digitalWrite(RIGHT_DIR, HIGH);  // 방향 반전됨 (전진)
   analogWrite(LEFT_PWM, motorSpeed);
   analogWrite(RIGHT_PWM, motorSpeed);
+  lastCommand = 1;
 }
 
 void moveBackward() {
@@ -179,6 +190,7 @@ void moveBackward() {
   digitalWrite(RIGHT_DIR, LOW);   // 반대방향 (후진)
   analogWrite(LEFT_PWM, motorSpeed);
   analogWrite(RIGHT_PWM, motorSpeed);
+  lastCommand = 2;
 }
 
 void turnLeft() {
@@ -187,6 +199,7 @@ void turnLeft() {
   digitalWrite(RIGHT_DIR, HIGH);
   analogWrite(LEFT_PWM, motorSpeed);
   analogWrite(RIGHT_PWM, motorSpeed);
+  lastCommand = 3;
 }
 
 void turnRight() {
@@ -195,9 +208,42 @@ void turnRight() {
   digitalWrite(RIGHT_DIR, LOW);
   analogWrite(LEFT_PWM, motorSpeed);
   analogWrite(RIGHT_PWM, motorSpeed);
+  lastCommand = 4;
 }
 
 void stopMotors() {
   analogWrite(LEFT_PWM, 0);
   analogWrite(RIGHT_PWM, 0);
+}
+
+// 간이 브레이크: 직전 구동의 반대 토크를 짧게 인가한 뒤 정지
+void applyBrake() {
+  Serial.println("Brake");
+  if (lastCommand == 1) { // forward → brief backward
+    digitalWrite(LEFT_DIR, LOW);
+    digitalWrite(RIGHT_DIR, LOW);
+    analogWrite(LEFT_PWM, BRAKE_PWM);
+    analogWrite(RIGHT_PWM, BRAKE_PWM);
+    delay(BRAKE_MS);
+  } else if (lastCommand == 2) { // backward → brief forward
+    digitalWrite(LEFT_DIR, HIGH);
+    digitalWrite(RIGHT_DIR, HIGH);
+    analogWrite(LEFT_PWM, BRAKE_PWM);
+    analogWrite(RIGHT_PWM, BRAKE_PWM);
+    delay(BRAKE_MS);
+  } else if (lastCommand == 3) { // left → brief right torque
+    digitalWrite(LEFT_DIR, HIGH);
+    digitalWrite(RIGHT_DIR, LOW);
+    analogWrite(LEFT_PWM, BRAKE_PWM);
+    analogWrite(RIGHT_PWM, BRAKE_PWM);
+    delay(BRAKE_MS);
+  } else if (lastCommand == 4) { // right → brief left torque
+    digitalWrite(LEFT_DIR, LOW);
+    digitalWrite(RIGHT_DIR, HIGH);
+    analogWrite(LEFT_PWM, BRAKE_PWM);
+    analogWrite(RIGHT_PWM, BRAKE_PWM);
+    delay(BRAKE_MS);
+  }
+  stopMotors();
+  lastCommand = 0;
 }
