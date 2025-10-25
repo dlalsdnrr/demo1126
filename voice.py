@@ -7,7 +7,6 @@ import base64
 from typing import Optional, Dict, Any
 import time
 import difflib
-# import subprocess # espeak-ng 사용을 위해 제거
 
 from flask import Blueprint, jsonify, request
 
@@ -25,7 +24,6 @@ try:
     import edge_tts
     import asyncio
     from pydub import AudioSegment
-    # from pydub.playback import play # 웹 API 환경에서는 play 대신 Base64 인코딩 사용
     from pydub.effects import speedup
     TTS_AVAILABLE = True
     USE_EDGE_TTS = True
@@ -38,7 +36,7 @@ except Exception: # pragma: no cover
     USE_EDGE_TTS = False
     print("Warning: edge-tts, pydub or FFmpeg not installed. Audio processing/TTS unavailable.")
     
-# Whisper 모델 로드는 두 번째 코드와 동일하게 유지
+# Whisper 모델은 "base" 모델 설정을 유지하여 속도와 정확도의 균형을 맞춥니다.
 WHISPER_MODEL = None
 
 def load_whisper_model():
@@ -46,7 +44,6 @@ def load_whisper_model():
     global WHISPER_MODEL
     if WHISPER_MODEL is None and WhisperModel is not None:
         try:
-            # 두 번째 코드의 설정 ("base" 모델) 유지
             WHISPER_MODEL = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=4)
             print("--- INFO: Faster Whisper 'base' model loaded successfully.")
         except Exception as e:
@@ -54,7 +51,6 @@ def load_whisper_model():
             pass
     return WHISPER_MODEL
 
-# 💡 [TTS 변경] espeak-ng 대신 edge-tts를 사용하며, 결과를 Base64 WAV/MP3로 반환합니다.
 async def speak_edge_tts_to_base64(text: str, voice="ko-KR-SunHiNeural", speed_factor=1.1) -> Optional[str]:
     """edge-tts를 사용하여 텍스트를 음성으로 변환하고 Base64 MP3를 반환합니다."""
     if not USE_EDGE_TTS or not AudioSegment:
@@ -66,38 +62,29 @@ async def speak_edge_tts_to_base64(text: str, voice="ko-KR-SunHiNeural", speed_f
     try:
         communicate = edge_tts.Communicate(text, voice)
         
-        # 1. 오디오 데이터를 메모리 버퍼에 저장
         audio_data = b""
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 audio_data += chunk["data"]
         
-        # 2. pydub으로 MP3 로드 및 속도 조절
         audio_io = io.BytesIO(audio_data)
         song = AudioSegment.from_mp3(audio_io)
         
         if speed_factor != 1.0:
-            # from pydub.effects import speedup (speedup 함수 사용)
-            # 1.1배속으로 빠르게 (세 번째 코드의 설정 적용)
             song = speedup(song, playback_speed=speed_factor)
         
-        # 3. 오디오를 메모리에 WAV 또는 MP3로 인코딩 (웹 환경에 맞게 MP3/WAV 선택 가능)
         output_buffer = io.BytesIO()
-        # MP3로 인코딩 (Base64 크기를 줄이기 위해)
         song.export(output_buffer, format="mp3") 
         output_buffer.seek(0)
         
-        # 4. Base64 인코딩 및 반환
         return base64.b64encode(output_buffer.read()).decode('utf-8')
         
     except Exception as e:
         print(f"--- ERROR: edge-tts failed: {e}")
         return None
 
-# 💡 비동기 함수를 동기로 감싸는 헬퍼 함수 (Flask API는 동기적이므로 필요)
 def get_tts_base64(text: str) -> Optional[str]:
     """asyncio.run을 사용하여 비동기 TTS 함수를 실행합니다."""
-    # 윈도우 환경에서 asyncio.run을 스레드 내에서 호출할 때의 오류를 방지
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
@@ -111,25 +98,27 @@ class VoiceAssistant:
     def __init__(self) -> None:
         self._whisper_model = load_whisper_model()
 
-        # 💡 [수정] 종료 키워드 사용하지 않으므로 비워둡니다.
         self._exit_keywords = []
         
+        # 💡 [개선] 키워드 유사어를 최대한 많이 추가
         self.KEYWORDS = {
-            "타율": ["타율", "타이율", "타유율", "타위", "타이위", "타유", "다율", "타뉼", "타룰", "타유를", "타유리", "타율은", "타율이"],
-            "홈런": ["홈런", "홍런", "홈롬", "홍론", "훔는", "홈론", "홈눈", "험론", "호너", "홈너", "홈넌", "홈런은", "홈런이", "홈런개수"],
-            "안타": ["안타", "앙타", "안 타", "암타", "안탈", "안탑", "아타", "안타는", "안타가", "아안타", "안타개수"]
+            "타율": ["타율", "타이율", "타유율", "타위", "타이위", "타유", "다율", "타뉼", "타룰", "타유를", "타유리", "타율은", "타율이", 
+                     "다요래", "타이유", "타요를", "타요율", "다육", "다이율", "다이유", "다유"],
+            "홈런": ["홈런", "홍런", "홈롬", "홍론", "훔는", "홈론", "홈눈", "험론", "호너", "홈너", "홈넌", "홈런은", "홈런이", "홈런개수",
+                     "홍남", "홈남", "홍럼", "홈넘", "흠런", "음란", "엄남"],
+            "안타": ["안타", "앙타", "안 타", "암타", "안탈", "안탑", "아타", "안타는", "안타가", "아안타", "안타개수",
+                     "안나", "안타로", "안다", "안달", "았다"]
         }
         
-        # KBO 기록지 TOP 5 선수 별명만 반영
+        # 💡 [개선] 모든 선수 별명에 오인식 가능성이 높은 별명 추가
         self.PLAYER_ALIASES = {
-            "김영웅": ["김영웅", "기명웅", "김형웅", "김영", "기명", "김용웅", "김여운", "김영웅이"],
-            "리베라토": ["리베라토", "이베라토", "리베라", "이베라", "이베라도", "리베라토는", "리베라토의", "리배라토"],
-            "하주석": ["하주석", "아주석", "화주석", "하주소", "하주", "하주석이", "하주석은", "하즈석"],
-            "김태훈": ["김태훈", "김태운", "김태희", "김대훈", "김대운", "김태훈이", "김태훈은", "김대훈이"],
-            "최재훈": ["최재훈", "체재훈", "췌재훈", "최재", "최재훈이", "최재훈은", "최대훈"]
+            "김영웅": ["김영웅", "기명웅", "김형웅", "김영", "기명", "김용웅", "김여운", "김영웅이", "김이용", "김이웅", "이명우", "김여름"],
+            "리베라토": ["리베라토", "이베라토", "리베라", "이베라", "이베라도", "리베라토는", "리베라토의", "리배라토", "니베라도", "이베라도", "리베라도"],
+            "하주석": ["하주석", "아주석", "화주석", "하주소", "하주", "하주석이", "하주석은", "하즈석", "하나 투속", "하나투속", "아나 투속", "아주석"],
+            "김태훈": ["김태훈", "김태운", "김태희", "김대훈", "김대운", "김태훈이", "김태훈은", "김대훈이", "김태우", "김태", "김대운"],
+            "최재훈": ["최재훈", "체재훈", "췌재훈", "최재", "최재훈이", "최재훈은", "최대훈", "최정은", "채재훈", "체제훈", "최저온"]
         }
         
-        # KBO 기록지 TOP 5 선수 기록만 반영
         self.PLAYERS_DATA = {
             "김영웅": { "타율": 0.643, "홈런": 3, "안타": 9 },
             "리베라토": { "타율": 0.467, "홈런": 1, "안타": 7 },
@@ -138,8 +127,8 @@ class VoiceAssistant:
             "최재훈": { "타율": 0.385, "홈런": 0, "안타": 5 }
         }
 
-    # --- 유틸리티 함수 (두 번째 코드의 퍼지 매칭 로직 유지) ---
-    def _fuzzy_match(self, text: str, candidates: list[str], threshold=0.7) -> bool:
+    # --- 유틸리티 함수 ---
+    def _fuzzy_match(self, text: str, candidates: list[str], threshold=0.65) -> bool: # 임계값 0.65로 유지
         """퍼지 매칭을 통해 텍스트와 후보 단어를 비교합니다."""
         for word in candidates:
             if word in text:
@@ -150,10 +139,10 @@ class VoiceAssistant:
         return False
 
     def _transcribe(self, audio: np.ndarray) -> Optional[str]:
-        # 두 번째 코드의 STT 로직 유지 (base 모델, 공백 유지)
         if self._whisper_model is None:
             return None
         try:
+            # beam_size=5 유지
             segments, _ = self._whisper_model.transcribe(
                 audio, language="ko", beam_size=5, best_of=5,
                 vad_filter=True, vad_parameters={"min_silence_duration_ms": 500}
@@ -165,7 +154,6 @@ class VoiceAssistant:
             return None
 
     def _find_player(self, text: str) -> Optional[str]:
-        # 두 번째 코드의 NLU 로직 유지 (퍼지 매칭 사용)
         if not text: return None
         for canonical_name, aliases in self.PLAYER_ALIASES.items():
             if self._fuzzy_match(text, aliases):
@@ -173,19 +161,20 @@ class VoiceAssistant:
         return None
 
     def _find_keyword(self, text: str) -> Optional[str]:
-        # 두 번째 코드의 NLU 로직 유지 (퍼지 매칭 사용)
         if not text: return None
+        
+        # 💡 [개선] '다요래'가 발견되면 '타율'로 강제 매핑 (이전 오류 패턴 반영)
+        if "다요래" in text:
+            return "타율"
+            
         for keyword, similar_words in self.KEYWORDS.items():
             if self._fuzzy_match(text, similar_words):
                 return keyword
         return None
 
     def _get_reply(self, text: str, player_name: Optional[str], keyword: Optional[str]) -> str:
-        # 두 번째 코드의 응답 생성 로직 유지
         if not text:
             return "잘 못 들었어요. 다시 말씀해 주시겠어요?"
-        
-        # 💡 [수정] 종료 키워드 확인 로직을 제거함
         
         if not player_name:
             return "죄송해요, 선수 이름을 말씀해주세요."
@@ -200,7 +189,6 @@ class VoiceAssistant:
         if value is None:
             return f"죄송해요, {player_name} 선수의 {keyword} 정보가 없습니다."
         
-        # 타율은 .3f 포맷 유지
         if keyword == "타율":
             return f"{player_name} 선수의 타율은 {value:.3f}입니다."
         elif keyword == "홈런":
@@ -249,7 +237,6 @@ class VoiceAssistant:
 
                 # --- 4. 텍스트 보정 ---
                 if player_name and keyword:
-                    # 두 번째 코드의 표시 텍스트 형식 유지
                     display_user_text = f"{player_name} 선수 {keyword} 알려줘"
                 elif user_text:
                     display_user_text = user_text
@@ -263,7 +250,6 @@ class VoiceAssistant:
 
         # --- 6. TTS (AI 텍스트 -> AI 음성) 및 Base64 인코딩 ---
         tts_start = time.time()
-        # 💡 [TTS 변경] edge-tts로 변경하여 Base64 오디오 생성
         if TTS_AVAILABLE:
             audio_base64 = get_tts_base64(reply_text)
         else:
