@@ -7,17 +7,33 @@ import base64
 from typing import Optional, Dict, Any
 import time
 import difflib
+import requests # <-- requests 라이브러리 추가
 
 from flask import Blueprint, jsonify, request
 
-# --- STT (Faster Whisper) ---
+# --- ETRI STT 설정 및 모듈 임포트 ---
+ETRI_API_KEY = ""  # <-- 여기에 발급받은 실제 키를 입력하세요.
+# https를 사용하여 방화벽 차단 문제를 줄이는 것을 권장합니다.
+ETRI_API_URL = "http://epretx.etri.re.kr:8000/api/WiseASR_Recognition" 
+USE_ETRI_STT = False 
+
 try:
-    from faster_whisper import WhisperModel
     import numpy as np
-except Exception: # pragma: no cover
+    # Whisper 관련 모듈 제거
     WhisperModel = None
+    
+    # requests 및 API Key 설정 확인
+    if requests and ETRI_API_KEY != "YOUR_ETRI_API_KEY":
+        USE_ETRI_STT = True
+        print("--- INFO: ETRI STT API enabled.")
+    elif requests:
+        print("Warning: ETRI_API_KEY not set. STT unavailable.")
+    else:
+        print("Warning: requests module not installed. STT unavailable.")
+
+except Exception: # pragma: no cover
     np = None
-    print("Warning: faster-whisper or numpy not installed. Voice input unavailable.")
+    print("Warning: numpy not installed. Voice input unavailable.")
 
 # --- TTS (edge-tts + pydub) 통합 ---
 try:
@@ -36,20 +52,14 @@ except Exception: # pragma: no cover
     USE_EDGE_TTS = False
     print("Warning: edge-tts, pydub or FFmpeg not installed. Audio processing/TTS unavailable.")
     
-# Whisper 모델은 "base" 모델 설정을 유지하여 속도와 정확도의 균형을 맞춥니다.
+# Whisper 모델 관련 전역 변수 변경
 WHISPER_MODEL = None
 
 def load_whisper_model():
-    """Faster Whisper 모델을 로드하는 함수"""
+    """ETRI API 사용으로 인해 이 함수는 더 이상 사용되지 않습니다."""
     global WHISPER_MODEL
-    if WHISPER_MODEL is None and WhisperModel is not None:
-        try:
-            WHISPER_MODEL = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=4)
-            print("--- INFO: Faster Whisper 'base' model loaded successfully.")
-        except Exception as e:
-            print(f"--- ERROR: Failed to load Whisper model: {e}")
-            pass
-    return WHISPER_MODEL
+    print("--- INFO: Using ETRI STT. load_whisper_model skipped.")
+    return None
 
 async def speak_edge_tts_to_base64(text: str, voice="ko-KR-SunHiNeural", speed_factor=1.1) -> Optional[str]:
     """edge-tts를 사용하여 텍스트를 음성으로 변환하고 Base64 MP3를 반환합니다."""
@@ -96,21 +106,19 @@ def get_tts_base64(text: str) -> Optional[str]:
 
 class VoiceAssistant:
     def __init__(self) -> None:
-        self._whisper_model = load_whisper_model()
-
+        # self._whisper_model = load_whisper_model() # STT 엔진 변경으로 제거
         self._exit_keywords = []
         
-        # 💡 [개선] 키워드 유사어를 최대한 많이 추가
+        # --- 키워드 및 선수 데이터 ---
         self.KEYWORDS = {
             "타율": ["타율", "타이율", "타유율", "타위", "타이위", "타유", "다율", "타뉼", "타룰", "타유를", "타유리", "타율은", "타율이", 
-                     "다요래", "타이유", "타요를", "타요율", "다육", "다이율", "다이유", "다유"],
+                   "다요래", "타이유", "타요를", "타요율", "다육", "다이율", "다이유", "다유"],
             "홈런": ["홈런", "홍런", "홈롬", "홍론", "훔는", "홈론", "홈눈", "험론", "호너", "홈너", "홈넌", "홈런은", "홈런이", "홈런개수",
-                     "홍남", "홈남", "홍럼", "홈넘", "흠런", "음란", "엄남"],
+                   "홍남", "홈남", "홍럼", "홈넘", "흠런", "음란", "엄남"],
             "안타": ["안타", "앙타", "안 타", "암타", "안탈", "안탑", "아타", "안타는", "안타가", "아안타", "안타개수",
-                     "안나", "안타로", "안다", "안달", "았다"]
+                   "안나", "안타로", "안다", "안달", "았다"]
         }
         
-        # 💡 [개선] 모든 선수 별명에 오인식 가능성이 높은 별명 추가
         self.PLAYER_ALIASES = {
             "김영웅": ["김영웅", "기명웅", "김형웅", "김영", "기명", "김용웅", "김여운", "김영웅이", "김이용", "김이웅", "이명우", "김여름"],
             "리베라토": ["리베라토", "이베라토", "리베라", "이베라", "이베라도", "리베라토는", "리베라토의", "리배라토", "니베라도", "이베라도", "리베라도"],
@@ -128,7 +136,7 @@ class VoiceAssistant:
         }
 
     # --- 유틸리티 함수 ---
-    def _fuzzy_match(self, text: str, candidates: list[str], threshold=0.65) -> bool: # 임계값 0.65로 유지
+    def _fuzzy_match(self, text: str, candidates: list[str], threshold=0.65) -> bool:
         """퍼지 매칭을 통해 텍스트와 후보 단어를 비교합니다."""
         for word in candidates:
             if word in text:
@@ -138,22 +146,61 @@ class VoiceAssistant:
                 return True
         return False
 
-    def _transcribe(self, audio: np.ndarray) -> Optional[str]:
-        if self._whisper_model is None:
+    def _transcribe_etri(self, audio_data: bytes) -> Optional[str]:
+        """ETRI STT API를 사용하여 오디오 바이트를 텍스트로 변환합니다."""
+        if not USE_ETRI_STT or not requests:
+            print("--- ERROR: ETRI STT not available or requests module missing.")
             return None
+            
+        print("--- INFO: Sending audio to ETRI STT API...")
+        
+        request_json = {
+            "argument": {
+                "language_code": "korean",
+                "audio": base64.b64encode(audio_data).decode('utf-8') # Base64 인코딩
+            }
+        }
+        
+        http_headers = {
+            "Authorization": ETRI_API_KEY,
+            "Content-Type": "application/json; charset=UTF-8",
+        }
+        
         try:
-            # beam_size=5 유지
-            segments, _ = self._whisper_model.transcribe(
-                audio, language="ko", beam_size=5, best_of=5,
-                vad_filter=True, vad_parameters={"min_silence_duration_ms": 500}
-            )
-            text = " ".join(segment.text.strip() for segment in segments).lower() 
-            return text if text else None
-        except Exception as e:
-            print(f"--- ERROR: Transcription failed: {e}")
+            response = requests.post(ETRI_API_URL, headers=http_headers, json=request_json, timeout=10) # 타임아웃 10초 설정
+            response.raise_for_status() # HTTP 오류가 발생하면 예외 발생
+            
+            result_json = response.json()
+            
+            # [디버깅] ETRI API의 전체 응답을 확인합니다.
+            print(f"--- DEBUG: ETRI Full Response: {result_json}")
+            
+            # ETRI API 응답 형식 확인 (result: 0이 성공)
+            if result_json.get("result") == 0:
+                # 💡 [수정됨] ETRI 응답 키 'recognized_text' -> 'recognized'
+                recognized_text = result_json.get("return_object", {}).get("recognized", "").strip() 
+                return recognized_text.lower() if recognized_text else None
+            else:
+                # API 처리 오류 (예: API 키 오류, 할당량 초과 등)
+                error_msg = result_json.get("return_object", {}).get("error_text", "Unknown ETRI API error")
+                print(f"--- ERROR: ETRI STT API returned error: {error_msg}")
+                return None
+            
+        except requests.exceptions.RequestException as e:
+            # HTTP 연결 오류 (Connection refused, Timeout 등)
+            print(f"--- ERROR: HTTP request to ETRI STT failed: {e}")
             return None
+        except Exception as e:
+            print(f"--- ERROR: ETRI STT processing failed: {e}")
+            return None
+            
+    def _transcribe(self, audio: Any) -> Optional[str]:
+        """STT 엔진 변경으로 사용되지 않음."""
+        print("--- WARNING: _transcribe (Whisper) function called, but ETRI STT is active.")
+        return None
 
     def _find_player(self, text: str) -> Optional[str]:
+        """텍스트에서 선수 이름을 찾습니다."""
         if not text: return None
         for canonical_name, aliases in self.PLAYER_ALIASES.items():
             if self._fuzzy_match(text, aliases):
@@ -161,9 +208,8 @@ class VoiceAssistant:
         return None
 
     def _find_keyword(self, text: str) -> Optional[str]:
+        """텍스트에서 정보 키워드(타율, 홈런 등)를 찾습니다."""
         if not text: return None
-        
-        # 💡 [개선] '다요래'가 발견되면 '타율'로 강제 매핑 (이전 오류 패턴 반영)
         if "다요래" in text:
             return "타율"
             
@@ -173,6 +219,7 @@ class VoiceAssistant:
         return None
 
     def _get_reply(self, text: str, player_name: Optional[str], keyword: Optional[str]) -> str:
+        """분석된 의도를 바탕으로 AI 응답 텍스트를 생성합니다."""
         if not text:
             return "잘 못 들었어요. 다시 말씀해 주시겠어요?"
         
@@ -209,23 +256,30 @@ class VoiceAssistant:
         display_user_text = "..."
         audio_base64 = None
             
-        if self._whisper_model is None or not np or not TTS_AVAILABLE:
-            reply_text = "음성 처리 모듈(Whisper/Pydub/Edge-TTS)이 준비되지 않았습니다."
+        # 💡 STT 모듈 사용 가능 여부 확인 로직을 ETRI STT 기준으로 변경
+        if not USE_ETRI_STT or not AudioSegment or not TTS_AVAILABLE:
+            reply_text = "음성 처리 모듈(ETRI STT/Pydub/Edge-TTS)이 준비되지 않았습니다. API 키를 확인하거나 필요한 모듈/FFmpeg을 설치해주세요."
         else:
             try:
-                # --- 1. 오디오 로드 및 변환 (pydub) ---
+                # --- 1. 오디오 로드 및 ETRI STT용 WAV 데이터로 변환 (pydub) ---
                 load_start = time.time()
                 audio_segment = AudioSegment.from_file(audio_file_storage)
-                audio_segment = audio_segment.set_frame_rate(16000).set_channels(1).set_sample_width(2)
-                samples = np.array(audio_segment.get_array_of_samples())
-                audio_float = samples.astype(np.float32) / 32768.0
-                audio_to_transcribe = audio_float
-                print(f"--- TIME: Audio Load/Convert: {time.time() - load_start:.3f}s")
                 
-                # --- 2. STT (음성 -> 텍스트) ---
+                # 16kHz, Mono, 16-bit short-int (2 bytes) RAW PCM으로 설정 (ETRI 요구 스펙)
+                audio_segment = audio_segment.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+                
+                # 💡 [수정됨] AudioSegment를 RAW PCM이 아닌 'wav' 포맷의 바이트로 추출합니다.
+                # ETRI API는 파일 헤더가 포함된 완전한 오디오 파일을 기대합니다.
+                wav_audio_io = io.BytesIO()
+                audio_segment.export(wav_audio_io, format="wav") # <-- ★★★ format="raw"에서 "wav"로 변경 ★★★
+                audio_data_for_etri = wav_audio_io.getvalue()
+                
+                print(f"--- TIME: Audio Load/Convert for ETRI (WAV): {time.time() - load_start:.3f}s")
+                
+                # --- 2. STT (음성 -> 텍스트) - ETRI API 사용 ---
                 stt_start = time.time()
-                user_text = self._transcribe(audio_to_transcribe)
-                print(f"--- TIME: STT Transcription: {time.time() - stt_start:.3f}s")
+                user_text = self._transcribe_etri(audio_data_for_etri) # ETRI STT 함수 호출 (WAV 바이트 전달)
+                print(f"--- TIME: STT Transcription (ETRI): {time.time() - stt_start:.3f}s")
                 print(f"--- INFO: STT Text: {user_text}")
 
                 # --- 3. NLU (텍스트 -> 의도) ---
@@ -250,12 +304,13 @@ class VoiceAssistant:
 
         # --- 6. TTS (AI 텍스트 -> AI 음성) 및 Base64 인코딩 ---
         tts_start = time.time()
-        if TTS_AVAILABLE:
+        if TTS_AVAILABLE and reply_text:
             audio_base64 = get_tts_base64(reply_text)
         else:
             audio_base64 = None
-            print("--- WARNING: TTS is not available, skipping audio generation.")
-            
+            if not TTS_AVAILABLE:
+                print("--- WARNING: TTS is not available, skipping audio generation.")
+        
         print(f"--- TIME: TTS Generation: {time.time() - tts_start:.3f}s")
         
         total_time = time.time() - start_time
@@ -266,7 +321,7 @@ class VoiceAssistant:
             "ok": True,
             "display_user_text": display_user_text,
             "reply_text": reply_text,
-            "audio_base64": audio_base64 # Base64 오디오 데이터
+            "audio_base64": audio_base64
         }
 
 
@@ -296,6 +351,6 @@ def api_voice_process_ptt():
     response_data = va.process_ptt_audio(audio_file)
 
     if not response_data.get("ok"):
-            return jsonify({"ok": False, "error": "Failed to process audio"}), 500
+        return jsonify({"ok": False, "error": "Failed to process audio"}), 500
 
     return jsonify(response_data)
