@@ -13,7 +13,6 @@ from flask import Blueprint, jsonify, request
 
 # --- ETRI STT 설정 및 모듈 임포트 ---
 ETRI_API_KEY = ""  # <-- 여기에 발급받은 실제 키를 입력하세요.
-# https를 사용하여 방화벽 차단 문제를 줄이는 것을 권장합니다.
 ETRI_API_URL = "http://epretx.etri.re.kr:8000/api/WiseASR_Recognition" 
 USE_ETRI_STT = False 
 
