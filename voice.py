@@ -11,28 +11,26 @@ import requests # <-- requests 라이브러리 추가
 
 from flask import Blueprint, jsonify, request
 
+# --- 💡 [수정됨] config 모듈에서 설정 가져오기 ---
+import config 
+
 # --- ETRI STT 설정 및 모듈 임포트 ---
-ETRI_API_KEY = ""  # <-- 여기에 발급받은 실제 키를 입력하세요.
-ETRI_API_URL = "http://epretx.etri.re.kr:8000/api/WiseASR_Recognition" 
 USE_ETRI_STT = False 
 
+# --- 💡 [수정됨] numpy 임포트 블록 제거 및 config.py 연동 ---
 try:
-    import numpy as np
-    # Whisper 관련 모듈 제거
-    WhisperModel = None
-    
     # requests 및 API Key 설정 확인
-    if requests and ETRI_API_KEY != "YOUR_ETRI_API_KEY":
+    if requests and config.ETRI_API_KEY: # config의 키가 비어있지 않은지 확인
         USE_ETRI_STT = True
         print("--- INFO: ETRI STT API enabled.")
     elif requests:
-        print("Warning: ETRI_API_KEY not set. STT unavailable.")
+        print("Warning: ETRI_API_KEY not set in config/env. STT unavailable.") # 경고 메시지 수정
     else:
         print("Warning: requests module not installed. STT unavailable.")
-
-except Exception: # pragma: no cover
-    np = None
-    print("Warning: numpy not installed. Voice input unavailable.")
+except ImportError: # requests가 없는 경우
+    print("Warning: requests module not installed. STT unavailable.")
+except Exception as e: # pragma: no cover
+    print(f"Error during initialization: {e}")
 
 # --- TTS (edge-tts + pydub) 통합 ---
 try:
@@ -161,12 +159,14 @@ class VoiceAssistant:
         }
         
         http_headers = {
-            "Authorization": ETRI_API_KEY,
+            # 💡 [수정됨] config.ETRI_API_KEY 사용
+            "Authorization": config.ETRI_API_KEY, 
             "Content-Type": "application/json; charset=UTF-8",
         }
         
         try:
-            response = requests.post(ETRI_API_URL, headers=http_headers, json=request_json, timeout=10) # 타임아웃 10초 설정
+            # 💡 [수정됨] config.ETRI_API_URL 사용
+            response = requests.post(config.ETRI_API_URL, headers=http_headers, json=request_json, timeout=10) # 타임아웃 10초 설정
             response.raise_for_status() # HTTP 오류가 발생하면 예외 발생
             
             result_json = response.json()
@@ -353,3 +353,5 @@ def api_voice_process_ptt():
         return jsonify({"ok": False, "error": "Failed to process audio"}), 500
 
     return jsonify(response_data)
+
+
