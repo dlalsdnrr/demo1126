@@ -42,7 +42,7 @@ BLE_ADAPTER_ADDR = os.getenv("BLE_ADAPTER_ADDR", "2C:CF:67:E9:50:B5")
 BLE_SERVICE_UUID = os.getenv("BLE_SERVICE_UUID", "12345678-1234-5678-1234-56789abcdef0")
 BLE_CHAR_UUID = os.getenv("BLE_CHAR_UUID", "abcdef01-1234-5678-1234-56789abcdef0")
 
-# --- 💡 [추가됨] ETRI API 설정 ---
+# --- 💡 [추가됨] ETRI API 설정(유출,남용금지) ---
 ETRI_API_KEY = os.getenv("ETRI_API_KEY", "3279e8d3-3b28-437e-8acf-30641a370659")
 ETRI_API_URL = os.getenv("ETRI_API_URL", "http://epretx.etri.re.kr:8000/api/WiseASR_Recognition")
 
