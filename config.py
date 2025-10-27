@@ -7,6 +7,9 @@ try:
 except ImportError:
     pass
 
+# Gemini API 키
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
 # 날씨 API 키 (OpenWeatherMap)
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "")
 SERIAL_PORT = os.getenv("SERIAL_PORT", "COM5")

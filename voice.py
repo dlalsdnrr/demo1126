@@ -1,382 +1,502 @@
 from __future__ import annotations
 
 import os
-import threading
 import io
 import base64
-from typing import Optional, Dict, Any
+import tempfile
 import time
 import difflib
-import requests # <-- requests 라이브러리 추가
-import tempfile # 💡 [추가됨] Faster Whisper가 파일 경로를 사용하므로 임시 파일 생성을 위해 추가
+import subprocess
+import json
+import requests
+from typing import Optional, Dict, Any
 
 from flask import Blueprint, jsonify, request
+import google.generativeai as genai
 
-# --- 💡 config 모듈에서 설정 가져오기 ---
-import config 
+from config import GEMINI_API_KEY, WEATHER_API_KEY
 
-# --- STT 모듈 변경 (ETRI -> Faster Whisper) ---
+# ============================================================================
+# API 및 모듈 초기화
+# ============================================================================
+
+# --- Gemini API ---
+GEMINI_AVAILABLE = False
+if GEMINI_API_KEY:
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        GEMINI_AVAILABLE = True
+        print("✓ Gemini API 설정 완료")
+    except Exception as e:
+        print(f"✗ Gemini API 설정 실패: {e}")
+else:
+    print("✗ Gemini API Key 없음 (GEMINI_API_KEY 환경변수 필요)")
+
+# --- STT: Faster Whisper ---
 STT_AVAILABLE = False
-WHISPER_MODEL = None # 💡 [수정됨] Faster Whisper 모델을 저장할 전역 변수
-
+WHISPER_MODEL = None
 try:
-    from faster_whisper import WhisperModel # 💡 [수정됨] faster_whisper 임포트
+    from faster_whisper import WhisperModel
     STT_AVAILABLE = True
-    print("--- INFO: Faster Whisper STT module loaded.")
+    print("✓ Faster Whisper STT 로드 성공")
 except ImportError:
-    print("Warning: 'faster-whisper' module not installed. STT unavailable.")
-    print("--- Please run: pip install faster-whisper ---")
-    WhisperModel = None # type: ignore
-except Exception as e: # pragma: no cover
-    print(f"Error during Faster Whisper initialization: {e}")
-    WhisperModel = None # type: ignore
+    print("✗ faster-whisper 미설치. 실행: pip install faster-whisper")
+    WhisperModel = None
+except Exception as e:
+    print(f"✗ Faster Whisper 초기화 실패: {e}")
+    WhisperModel = None
 
+# --- 오디오 처리: ffmpeg ---
+FFMPEG_AVAILABLE = False
+FFMPEG_PATH = None
+def find_ffmpeg():
+    global FFMPEG_PATH, FFMPEG_AVAILABLE
+    env_path = os.environ.get("FFMPEG_PATH")
+    if env_path and os.path.exists(env_path):
+        FFMPEG_PATH = env_path
+        FFMPEG_AVAILABLE = True
+        return True
+    try:
+        result = subprocess.run(["where" if os.name == "nt" else "which", "ffmpeg"], capture_output=True, text=True, check=True)
+        path = result.stdout.strip().split('\n')[0]
+        if path and os.path.exists(path):
+            FFMPEG_PATH = path
+            FFMPEG_AVAILABLE = True
+            return True
+    except: pass
+    return False
 
-# --- TTS (edge-tts + pydub) 통합 (변경 없음) ---
+if find_ffmpeg():
+    print(f"✓ ffmpeg 찾음: {FFMPEG_PATH}")
+else:
+    print("✗ ffmpeg 없음. 다운로드: https://www.gyan.dev/ffmpeg/builds/")
+
+# --- TTS: gTTS & edge-tts ---
+GTTS_AVAILABLE = False
+try:
+    from gtts import gTTS
+    GTTS_AVAILABLE = True
+    print("✓ gTTS 로드 성공")
+except:
+    print("✗ gTTS 미설치. 실행: pip install gTTS")
+    gTTS = None
+
+EDGE_TTS_AVAILABLE = False
 try:
     import edge_tts
     import asyncio
-    from pydub import AudioSegment
-    from pydub.effects import speedup
-    TTS_AVAILABLE = True
-    USE_EDGE_TTS = True
-    print("--- INFO: edge-tts module loaded.")
-except Exception: # pragma: no cover
-    edge_tts = None
-    AudioSegment = None
-    speedup = None
-    TTS_AVAILABLE = False
-    USE_EDGE_TTS = False
-    print("Warning: edge-tts, pydub or FFmpeg not installed. Audio processing/TTS unavailable.")
+    EDGE_TTS_AVAILABLE = True
+    print("✓ edge-tts 로드 성공")
+except:
+    print("ℹ edge-tts 미사용 (gTTS로 대체)")
+    edge_tts, asyncio = None, None
     
+# ============================================================================
+# 외부 서비스 호출 (날씨)
+# ============================================================================
 
-# ===================================================================
-# 💡 [수정됨] load_whisper_model 함수 (Faster Whisper 로직으로)
-# ===================================================================
-def load_whisper_model(model_name: str = "base") -> Optional[Any]:
-    """Faster Whisper 모델을 로드하는 함수"""
+def get_yongin_weather() -> Optional[Dict[str, Any]]:
+    if not WEATHER_API_KEY:
+        print("✗ 날씨 API Key 없음 (WEATHER_API_KEY 환경변수 필요)")
+        return None
+    
+    # 용인시청 좌표
+    lat, lon = 37.2215, 127.1873
+    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric&lang=kr"
+    
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        # 필요한 정보만 간추리기
+        return {
+            "상태": data["weather"][0]["description"],
+            "온도": f"{data['main']['temp']:.1f}°C",
+            "체감온도": f"{data['main']['feels_like']:.1f}°C",
+            "습도": f"{data['main']['humidity']}%",
+            "풍속": f"{data['wind']['speed']:.1f}m/s"
+        }
+    except Exception as e:
+        print(f"✗ 날씨 정보 조회 실패: {e}")
+        return None
+
+# ============================================================================
+# 핵심 기능 (STT, TTS, 오디오 변환)
+# ============================================================================
+
+def convert_audio_to_wav(input_bytes: bytes) -> Optional[bytes]:
+    """ffmpeg로 오디오를 16kHz mono WAV로 변환"""
+    if not FFMPEG_AVAILABLE:
+        print("✗ ffmpeg 없음")
+        return None
+    
+    input_file = None
+    output_file = None
+    
+    try:
+        # 입력 임시 파일
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as f:
+            f.write(input_bytes)
+            input_file = f.name
+        
+        # 출력 임시 파일
+        output_file = tempfile.mktemp(suffix=".wav")
+        
+        # ffmpeg 변환
+        cmd = [
+            FFMPEG_PATH,
+            "-i", input_file,
+            "-ar", "16000",  # 16kHz
+            "-ac", "1",       # mono
+            "-sample_fmt", "s16",  # 16-bit
+            "-f", "wav",
+            "-y",  # 덮어쓰기
+            output_file
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            check=True
+        )
+        
+        # 출력 파일 읽기
+        with open(output_file, "rb") as f:
+            return f.read()
+            
+    except Exception as e:
+        print(f"✗ ffmpeg 변환 실패: {e}")
+        return None
+    finally:
+        # 임시 파일 정리
+        if input_file and os.path.exists(input_file):
+            try:
+                os.remove(input_file)
+            except:
+                pass
+        if output_file and os.path.exists(output_file):
+            try:
+                os.remove(output_file)
+            except:
+                pass
+
+def speak_gtts(text: str) -> Optional[str]:
+    """gTTS로 음성 합성 후 base64 반환"""
+    if not GTTS_AVAILABLE:
+        return None
+    
+    try:
+        print(f"→ gTTS 생성: {text[:30]}...")
+        buffer = io.BytesIO()
+        tts = gTTS(text=text, lang='ko')
+        tts.write_to_fp(buffer)
+        buffer.seek(0)
+        return base64.b64encode(buffer.read()).decode('utf-8')
+    except Exception as e:
+        print(f"✗ gTTS 실패: {e}")
+        return None
+
+def speak_edge_tts(text: str) -> Optional[str]:
+    """edge-tts로 음성 합성 후 base64 반환"""
+    if not EDGE_TTS_AVAILABLE:
+        return None
+    
+    try:
+        print(f"→ edge-tts 생성: {text[:30]}...")
+        
+        async def generate():
+            communicate = edge_tts.Communicate(text, "ko-KR-SunHiNeural", rate="+10%")
+            audio_data = b""
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_data += chunk["data"]
+            
+            return base64.b64encode(audio_data).decode('utf-8')
+        
+        # 이벤트 루프 실행
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(generate())
+        
+    except Exception as e:
+        print(f"✗ edge-tts 실패: {e}")
+        return None
+
+def get_tts_audio(text: str) -> Optional[str]:
+    """TTS 오디오 생성 (edge-tts 우선, 실패 시 gTTS)"""
+    # 1순위: edge-tts
+    result = speak_edge_tts(text)
+    if result:
+        return result
+    
+    # 2순위: gTTS
+    result = speak_gtts(text)
+    if result:
+        return result
+    
+    print("✗ 모든 TTS 엔진 실패")
+    return None
+
+def load_whisper_model() -> Optional[Any]:
+    """Faster Whisper 모델 초기화"""
     global WHISPER_MODEL, STT_AVAILABLE
-
+    
     if not STT_AVAILABLE:
-        print("--- ERROR: Faster Whisper module not imported. Cannot load model.")
         return None
     
     if WHISPER_MODEL is None:
         try:
-            print(f"--- INFO: Loading Faster Whisper STT model ('{model_name}')...")
-            # 💡 CPU에 최적화된 "base" 모델을 로드합니다 (Code 2의 설정과 동일)
-            WHISPER_MODEL = WhisperModel(model_name, device="cpu", compute_type="int8", cpu_threads=4)
-            print("--- INFO: Faster Whisper model loaded successfully.")
+            model_name = "small"
+            print(f"→ Whisper 모델 로딩 중 ({model_name})...")
+            WHISPER_MODEL = WhisperModel(
+                model_name,
+                device="cpu",
+                compute_type="int8",
+                cpu_threads=4
+            )
+            print("✓ Whisper 모델 로드 완료")
         except Exception as e:
-            print(f"--- ERROR: Failed to load Faster Whisper model: {e}")
-            STT_AVAILABLE = False # 로드 실패 시 STT 비활성화
+            print(f"✗ Whisper 모델 로드 실패: {e}")
+            STT_AVAILABLE = False
             WHISPER_MODEL = None
-            
+    
     return WHISPER_MODEL
-# ===================================================================
 
-
-# --- TTS 함수 (변경 없음) ---
-async def speak_edge_tts_to_base64(text: str, voice="ko-KR-SunHiNeural", speed_factor=1.1) -> Optional[str]:
-    if not USE_EDGE_TTS or not AudioSegment:
-        print("--- ERROR: edge-tts or pydub not available.")
-        return None
-    print(f"--- INFO: TTS generation (edge-tts) for: {text[:30]}...")
-    try:
-        communicate = edge_tts.Communicate(text, voice)
-        audio_data = b""
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                audio_data += chunk["data"]
-        audio_io = io.BytesIO(audio_data)
-        song = AudioSegment.from_mp3(audio_io)
-        if speed_factor != 1.0:
-            song = speedup(song, playback_speed=speed_factor)
-        output_buffer = io.BytesIO()
-        song.export(output_buffer, format="mp3", bitrate="64k") # 💡 저용량 MP3로 변경
-        output_buffer.seek(0)
-        return base64.b64encode(output_buffer.read()).decode('utf-8')
-    except Exception as e:
-        print(f"--- ERROR: edge-tts failed: {e}")
-        return None
-
-def get_tts_base64(text: str) -> Optional[str]:
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop.run_until_complete(speak_edge_tts_to_base64(text))
-
+# ============================================================================
+# VoiceAssistant 클래스
+# ============================================================================
 
 class VoiceAssistant:
-    def __init__(self) -> None:
-        # 💡 [수정됨] Faster Whisper 모델을 로드합니다.
-        self._whisper_model = load_whisper_model("base")
-        self._exit_keywords = []
+    def __init__(self):
+        self.whisper_model = load_whisper_model()
+        self.gemini_model = genai.GenerativeModel('gemini-2.5-flash') if GEMINI_AVAILABLE else None
         
-        # --- 키워드 및 선수 데이터 (변경 없음) ---
-        self.KEYWORDS = {
-            "타율": ["타율", "타이율", "타유율", "타위", "타이위", "타유", "다율", "타뉼", "타룰", "타유를", "타유리", "타율은", "타율이", 
-                   "다요래", "타이유", "타요를", "타요율", "다육", "다이율", "다이유", "다유"],
-            "홈런": ["홈런", "홍런", "홈롬", "홍론", "훔는", "홈론", "홈눈", "험론", "호너", "홈너", "홈넌", "홈런은", "홈런이", "홈런개수",
-                   "홍남", "홈남", "홍럼", "홈넘", "흠런", "음란", "엄남"],
-            "안타": ["안타", "앙타", "안 타", "암타", "안탈", "안탑", "아타", "안타는", "안타가", "아안타", "안타개수",
-                   "안나", "안타로", "안다", "안달", "았다"]
-        }
-        self.PLAYER_ALIASES = {
-            "김영웅": ["김영웅", "기명웅", "김형웅", "삼성 김영웅", "김영웅이", "기영웅", "김영", "영웅", "영웅이", "김여웅"],
-            "문현빈": ["문현빈", "문현빈이", "문현빈은", "한화 문현빈", "무년빈", "문현민", "무현빈", "현빈", "현빈이", "문현"],
-            "노시환": ["노시환", "노시환이", "노시환은", "한화 노시환", "노시완", "노시한", "요시환", "시환", "시환이", "롯시환"],
-            "리베라토": ["리베라토", "이베라토", "리베라", "이베라", "한화 리베라토", "리베라도", "이베라도", "니베라토", "니베라도"],
-            "김태훈": ["김태훈", "김태운", "김태희", "삼성 김태훈", "김대훈", "김태후", "태훈", "태훈이", "김태"],
-            "최재훈": ["최재훈", "체재훈", "췌재훈", "한화 최재훈", "최제훈", "채재훈", "재훈", "재훈이", "최재"],
-            "채은성": ["채은성", "채은성이", "한화 채은성", "최은성", "체은성", "은성", "은성이", "채은"],
-            "하주석": ["하주석", "아주석", "화주석", "한화 하주석", "하주서", "하주", "주석", "주석이", "아주석"],
-            "구자욱": ["구자욱", "구자욱이", "삼성 구자욱", "자욱이", "구자우", "구자옥", "자욱", "고자욱", "구자"],
-            "이재현": ["이재현", "이재현이", "삼성 이재현", "이재형", "이재연", "재현", "재현이", "이제현"],
-            "디아즈": ["디아즈", "디아스", "삼성 디아즈", "디아즈는", "디아스", "디아지", "디아", "디아즈가"],
-            "손아섭": ["손아섭", "손아섭이", "한화 손아섭", "소나섭", "손아", "아섭", "아섭이", "손아선"],
-            "김성윤": ["김성윤", "김성윤이", "삼성 김성윤", "김성용", "김성유", "성윤", "성윤이", "김성"],
-            "김지찬": ["김지찬", "김지찬이", "삼성 김지찬", "김희찬", "김기찬", "김주찬", "지찬", "지찬이", "김지"],
-            "강민호": ["강민호", "강민호는", "삼성 강민호", "강미노", "강민", "민호", "민호가"],
-            "심우준": ["심우준", "심우준이", "한화 심우준", "신우준", "시무준", "우준", "우준이", "시무"]
-        }
         self.PLAYERS_DATA = {
-            "김영웅": { "타율": 0.625, "홈런": 3, "안타": 10 },
-            "문현빈": { "타율": 0.444, "홈런": 2, "안타": 8 },
-            "노시환": { "타율": 0.429, "홈런": 2, "안타": 9 },
-            "리베라토": { "타율": 0.389, "홈런": 1, "안타": 7 },
-            "김태훈": { "타율": 0.353, "홈런": 2, "안타": 6 },
-            "최재훈": { "타율": 0.353, "홈런": 0, "안타": 6 },
-            "채은성": { "타율": 0.350, "홈런": 0, "안타": 7 },
-            "하주석": { "타율": 0.350, "홈런": 0, "안타": 7 },
-            "구자욱": { "타율": 0.313, "홈런": 0, "안타": 5 },
-            "이재현": { "타율": 0.294, "홈런": 1, "안타": 5 },
-            "디아즈": { "타율": 0.278, "홈런": 0, "안타": 5 },
-            "손아섭": { "타율": 0.263, "홈런": 0, "안타": 5 },
-            "김성윤": { "타율": 0.261, "홈런": 0, "안타": 6 },
-            "김지찬": { "타율": 0.190, "홈런": 0, "안타": 4 },
-            "강민호": { "타율": 0.188, "홈런": 1, "안타": 3 },
-            "심우준": { "타율": 0.077, "홈런": 0, "안타": 1 }
+            "김영웅": {"타율": 0.625, "홈런": 3, "안타": 10},
+            "문현빈": {"타율": 0.444, "홈런": 2, "안타": 8},
+            "노시환": {"타율": 0.429, "홈런": 2, "안타": 9},
+            "리베라토": {"타율": 0.389, "홈런": 1, "안타": 7},
+            "김태훈": {"타율": 0.353, "홈런": 2, "안타": 6},
+            "최재훈": {"타율": 0.353, "홈런": 0, "안타": 6},
+            "채은성": {"타율": 0.350, "홈런": 0, "안타": 7},
+            "하주석": {"타율": 0.350, "홈런": 0, "안타": 7},
+            "구자욱": {"타율": 0.313, "홈런": 0, "안타": 5},
+            "이재현": {"타율": 0.294, "홈런": 1, "안타": 5},
+            "디아즈": {"타율": 0.278, "홈런": 0, "안타": 5},
+            "손아섭": {"타율": 0.263, "홈런": 0, "안타": 5},
+            "김성윤": {"타율": 0.261, "홈런": 0, "안타": 6},
+            "김지찬": {"타율": 0.190, "홈런": 0, "안타": 4},
+            "강민호": {"타율": 0.188, "홈런": 1, "안타": 3},
+            "심우준": {"타율": 0.077, "홈런": 0, "안타": 1}
         }
-
-    # --- 유틸리티 함수 (변경 없음) ---
-    def _fuzzy_match(self, text: str, candidates: list[str], threshold=0.65) -> bool:
-        for word in candidates:
-            if word in text:
-                return True
-        for candidate in candidates:
-            if difflib.SequenceMatcher(None, text, candidate).ratio() > threshold:
-                return True
-        return False
-
-    # ===================================================================
-    # 💡 [STT 함수 교체] _transcribe_faster_whisper
-    # ===================================================================
-    def _transcribe_faster_whisper(self, wav_audio_bytes: bytes) -> Optional[str]:
-        """Faster Whisper를 사용하여 오디오 바이트를 텍스트로 변환합니다."""
-        if not STT_AVAILABLE or not self._whisper_model:
-            print("--- ERROR: Faster Whisper STT not available or model not loaded.")
+    
+    def transcribe_audio(self, audio_bytes: bytes) -> Optional[str]:
+        """오디오를 텍스트로 변환 (STT) - 노이즈 환경 최적화"""
+        if not STT_AVAILABLE or not self.whisper_model:
+            print("✗ STT 불가: Whisper 모델 없음")
             return None
-            
-        print("--- INFO: Transcribing audio with Faster Whisper...")
         
-        temp_file_path = None
+        temp_path = None
         try:
-            # 1. 임시 파일 생성 (WAV 바이트 사용)
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
-                temp_file.write(wav_audio_bytes)
-                temp_file_path = temp_file.name
+            # 노이즈 제거 (설치된 경우)
+            # processed_audio = reduce_noise_from_wav(audio_bytes) # 기존 노이즈 제거 로직 제거
             
-            # 2. Faster Whisper로 파일 변환 (Code 2의 VAD 옵션 사용)
-            segments, _ = self._whisper_model.transcribe(
-                temp_file_path,
-                language="ko", # 한국어
-                beam_size=5,
-                vad_filter=True, # 음성 구간 감지(VAD) 활성화
-                vad_parameters={"min_silence_duration_ms": 500} # 0.5초 묵음
+            # 임시 파일 생성
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
+                f.write(audio_bytes)
+                temp_path = f.name
+            
+            # Whisper 변환 (균형잡힌 설정)
+            print("→ STT 처리 중...")
+            segments, info = self.whisper_model.transcribe(
+                temp_path,
+                language="ko",
+                beam_size=5,              # 더 정확한 디코딩
+                best_of=5,                # 최상의 결과 선택
+                temperature=0.0,          # 확정적 결과 (랜덤성 제거)
+                vad_filter=True,          # 음성 구간만 감지
+                vad_parameters={
+                    "threshold": 0.3,                # 음성 감지 임계값 (관대하게)
+                    "min_speech_duration_ms": 100,   # 최소 음성 길이 (짧은 말도 인식)
+                    "max_speech_duration_s": 30,     # 최대 음성 길이
+                    "min_silence_duration_ms": 300,  # 최소 묵음 길이
+                    "speech_pad_ms": 300             # 음성 앞뒤 여유
+                },
+                condition_on_previous_text=False,  # 이전 텍스트 영향 제거
+                compression_ratio_threshold=2.4,   # 반복/쓰레기 텍스트 제거
+                log_prob_threshold=-1.0,           # 낮은 확률 세그먼트 제거
+                no_speech_threshold=0.4            # 음성 없음 임계값 (관대하게)
             )
             
-            # 3. 인식된 텍스트 조립
-            text = " ".join(segment.text.strip() for segment in segments).lower()
-            return text if text else None
-
+            # 세그먼트 수 확인
+            segments_list = list(segments)
+            print(f"  감지된 세그먼트: {len(segments_list)}개")
+            
+            if not segments_list:
+                print("✗ STT 결과 없음 (음성 구간 미감지)")
+                print("  → 더 크게 말씀해 주세요")
+                return None
+            
+            # 텍스트 조립
+            text = " ".join(s.text.strip() for s in segments_list).strip().lower()
+            
+            # 빈 결과 체크 (더 관대하게)
+            if not text or len(text) < 1:
+                print("✗ STT 결과 없음")
+                return None
+            
+            print(f"✓ STT 결과: '{text}'")
+            print(f"  언어: {info.language} (확률: {info.language_probability:.2%})")
+            return text
+            
         except Exception as e:
-            print(f"--- ERROR: Faster Whisper transcription failed: {e}")
-            print("--- INFO: This might be due to 'ffmpeg' not being installed on your system.")
+            print(f"✗ STT 실패: {e}")
             return None
         finally:
-            # 4. 임시 파일 삭제
-            if temp_file_path and os.path.exists(temp_file_path):
+            if temp_path and os.path.exists(temp_path):
                 try:
-                    os.remove(temp_file_path)
-                except Exception: # pragma: no cover
-                    pass # 임시 파일 삭제 실패 시에도 프로그램은 계속되어야 함
-            
-    def _transcribe(self, audio: Any) -> Optional[str]:
-        """STT 엔진 변경으로 사용되지 않음."""
-        print("--- WARNING: _transcribe function called, but Faster Whisper is active.")
-        return None
-    # ===================================================================
+                    os.remove(temp_path)
+                except:
+                    pass
+    
+    def generate_gemini_response(self, user_query: str) -> str:
+        if not self.gemini_model:
+            return "Gemini AI 모델이 준비되지 않았습니다."
 
-    # --- _find_player, _find_keyword, _get_reply (변경 없음) ---
-    def _find_player(self, text: str) -> Optional[str]:
-        if not text: return None
-        for canonical_name, aliases in self.PLAYER_ALIASES.items():
-            if self._fuzzy_match(text, aliases):
-                return canonical_name
-        return None
+        weather_data = get_yongin_weather()
+        player_data_str = json.dumps(self.PLAYERS_DATA, ensure_ascii=False, indent=2)
+        
+        prompt = f"""
+        당신은 KBO 리그 삼성 라이온즈와 한화 이글스 선수들의 기록에 대해 답하고, 용인의 현재 날씨를 알려주는 친절한 AI 야구 비서입니다.
 
-    def _find_keyword(self, text: str) -> Optional[str]:
-        if not text: return None
-        if "다요래" in text: 
-            return "타율"
-        for keyword, similar_words in self.KEYWORDS.items():
-            if self._fuzzy_match(text, similar_words):
-                return keyword
-        return None
+        # 지침:
+        1. 반드시 한국어로, 어린 아이에게 말하듯 친절하고 간결하게 답변하세요.
+        2. 답변은 1-2 문장으로 짧게 유지하세요.
+        3. 선수 기록 질문은 아래 `선수 기록 데이터`를 기반으로만 답하세요. 데이터에 없는 선수는 "죄송해요, 그 선수의 정보는 아직 없어요."라고 답하세요.
+        4. 날씨 질문은 아래 `실시간 용인 날씨` 데이터를 기반으로 답하세요. 날씨 데이터가 없으면 "날씨 정보를 가져올 수 없었어요."라고 답하세요.
+        5. 대화의 맥락과 상관없는 일반적인 질문에는 "저는 야구 전문 비서예요."라고 답하세요.
+        6. 음성이 오인식 될 수 있으니 비슷한 이름의 선수, 기능을 생각해서 답해주세요. ex) 날 쉬었대 -> 날씨어때, 김진찬 -> 김지찬 등
 
-    def _get_reply(self, text: str, player_name: Optional[str], keyword: Optional[str]) -> str:
-        # 💡 [수정됨] STT 실패 시(None) 응답
-        if not text:
-            return "음성 인식이 잘 되지 않았어요. 다시 말씀해 주시겠어요?"
-        if not player_name:
-            # 💡 [개선] STT 결과를 그대로 보여주기
-            return f"죄송해요, 선수 이름을 찾지 못했어요. (인식된 내용: {text})"
-        if not keyword:
-            return f"{player_name} 선수의 어떤 정보가 궁금하신가요?"
-            
-        player_info = self.PLAYERS_DATA.get(player_name)
-        if player_info is None:
-            return f"죄송해요, {player_name} 선수의 기록 정보가 없습니다."
-        value = player_info.get(keyword)
-        if value is None:
-            return f"죄송해요, {player_name} 선수의 {keyword} 정보가 없습니다."
-        if keyword == "타율":
-            return f"{player_name} 선수의 타율은 {value:.3f}입니다."
-        elif keyword == "홈런":
-            return f"{player_name} 선수의 홈런은 {value}개입니다."
-        elif keyword == "안타":
-            return f"{player_name} 선수의 안타는 {value}개입니다."
-        else:
-            return f"{player_name} 선수의 {keyword}은(는) {value}입니다."
-            
-    # ===================================================================
-    # 💡 [수정됨] process_ptt_audio 함수 (Faster Whisper 로직으로)
-    # ===================================================================
-    def process_ptt_audio(self, audio_file_storage) -> Dict[str, Any]:
-        """PTT 오디오를 처리하고, 텍스트와 Base64 오디오가 포함된 JSON을 반환합니다."""
+        ---
+        # 선수 기록 데이터 (JSON):
+        {player_data_str}
+        ---
+        # 실시간 용인 날씨:
+        {json.dumps(weather_data, ensure_ascii=False, indent=2) if weather_data else "데이터 없음"}
+        ---
+
+        # 사용자 질문:
+        "{user_query}"
+
+        # AI 답변:
+        """
+        
+        try:
+            print("→ Gemini 응답 생성 중...")
+            response = self.gemini_model.generate_content(prompt)
+            reply = response.text.strip()
+            print(f"✓ Gemini 응답: {reply}")
+            return reply
+        except Exception as e:
+            print(f"✗ Gemini API 호출 실패: {e}")
+            return "AI 응답 생성에 실패했어요."
+
+    def process_audio(self, audio_file) -> Dict[str, Any]:
+        """오디오 처리 메인 함수"""
         start_time = time.time()
-
+        
+        # 초기화
         user_text = None
         reply_text = None
-        player_name = None
-        keyword = None
-        display_user_text = "..."
         audio_base64 = None
-                
-        # 💡 [수정됨] STT_AVAILABLE (Faster Whisper) 기준으로 변경
-        if not STT_AVAILABLE or not AudioSegment or not TTS_AVAILABLE:
-            reply_text = "음성 처리 모듈(Faster Whisper/Pydub/Edge-TTS)이 준비되지 않았습니다."
-            if not STT_AVAILABLE:
-                reply_text += " (Whisper 모델 로드에 실패했을 수 있습니다. 서버 로그를 확인하세요.)"
+        display_text = "..."
+        
+        # 필수 모듈 체크
+        if not STT_AVAILABLE:
+            reply_text = "STT 모듈(Faster Whisper)이 설치되지 않았습니다."
+        elif not FFMPEG_AVAILABLE:
+            reply_text = "ffmpeg가 설치되지 않았습니다. 다운로드: https://www.gyan.dev/ffmpeg/builds/"
         else:
             try:
-                # --- 1. 오디오 로드 및 STT용 WAV 데이터로 변환 (pydub) ---
-                load_start = time.time()
-                audio_segment = AudioSegment.from_file(audio_file_storage)
+                # 1. 오디오 디코딩 (webm → wav)
+                print("→ 오디오 디코딩 중...")
+                t1 = time.time()
                 
-                # 16kHz, Mono, 16-bit (Whisper 권장 스펙)
-                audio_segment = audio_segment.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+                # 업로드된 파일을 바이트로 읽기
+                audio_file.seek(0)
+                input_bytes = audio_file.read()
                 
-                # 'wav' 포맷의 바이트로 추출
-                wav_audio_io = io.BytesIO()
-                audio_segment.export(wav_audio_io, format="wav")
-                audio_data_for_stt = wav_audio_io.getvalue()
+                # ffmpeg로 변환
+                wav_bytes = convert_audio_to_wav(input_bytes)
                 
-                print(f"--- TIME: Audio Load/Convert for STT (WAV): {time.time() - load_start:.3f}s")
+                if not wav_bytes:
+                    raise RuntimeError("오디오 변환 실패")
+                    
+                print(f"✓ 디코딩 완료 ({time.time()-t1:.2f}s)")
                 
-                # --- 2. STT (음성 -> 텍스트) - Faster Whisper 사용 ---
-                stt_start = time.time()
-                # 💡 [수정됨] _transcribe_etri -> _transcribe_faster_whisper 호출
-                user_text = self._transcribe_faster_whisper(audio_data_for_stt) 
-                print(f"--- TIME: STT Transcription (Faster Whisper): {time.time() - stt_start:.3f}s")
-                print(f"--- INFO: STT Text: {user_text}")
-
-                # --- 3. NLU (텍스트 -> 의도) ---
-                nlu_start = time.time()
-                if user_text:
-                    player_name = self._find_player(user_text)
-                    keyword = self._find_keyword(user_text)
-                print(f"--- TIME: NLU Processing: {time.time() - nlu_start:.3f}s")
-
-                # --- 4. 텍스트 보정 ---
-                if player_name and keyword:
-                    display_user_text = f"{player_name} 선수 {keyword} 알려줘"
-                elif user_text:
-                    display_user_text = user_text
-                else:
-                    # 💡 STT가 실패(None)했거나 빈 텍스트일 때
-                    display_user_text = "음성 인식 실패"
+                # 2. STT
+                t2 = time.time()
+                user_text = self.transcribe_audio(wav_bytes)
+                print(f"✓ STT 완료 ({time.time()-t2:.2f}s)")
                 
-                # --- 5. 응답 생성 ---
-                reply_text = self._get_reply(user_text, player_name, keyword)
+                # 3. NLU
+                # player = self.find_player(user_text) if user_text else None # 기존 플레이어 찾기 로직 제거
+                # keyword = self.find_keyword(user_text) if user_text else None # 기존 키워드 찾기 로직 제거
+                
+                # 4. 텍스트 보정
+                # if player and keyword: # 기존 텍스트 보정 로직 제거
+                #     display_text = f"{player} 선수 {keyword} 알려줘"
+                # elif user_text:
+                #     display_text = user_text
+                # else:
+                #     display_text = "음성 인식 실패"
+                
+                # 5. 응답 생성
+                reply_text = self.generate_gemini_response(user_text)
                 
             except Exception as e:
-                print(f"--- ERROR: Failed to process PTT audio: {e}")
-                reply_text = "오디오 처리 중 오류가 발생했습니다."
-
-        # --- 6. TTS (AI 텍스트 -> AI 음성) 및 Base64 인코딩 ---
-        tts_start = time.time()
-        if TTS_AVAILABLE and reply_text:
-            audio_base64 = get_tts_base64(reply_text) # <-- 실시간 생성
-        else:
-            audio_base64 = None
-            if not TTS_AVAILABLE:
-                print("--- WARNING: TTS is not available, skipping audio generation.")
+                print(f"✗ 처리 실패: {e}")
+                import traceback
+                traceback.print_exc()
+                reply_text = f"오디오 처리 중 오류 발생: {str(e)}"
         
-        print(f"--- TIME: TTS Generation: {time.time() - tts_start:.3f}s")
+        # 6. TTS
+        if reply_text:
+            t3 = time.time()
+            audio_base64 = get_tts_audio(reply_text)
+            print(f"✓ TTS 완료 ({time.time()-t3:.2f}s)")
         
         total_time = time.time() - start_time
-        print(f"--- TIME: Total process time: {total_time:.3f}s")
-                
-        # --- 7. 최종 JSON 반환 ---
+        print(f"✓ 전체 처리 시간: {total_time:.2f}s")
+        
         return {
             "ok": True,
-            "display_user_text": display_user_text,
+            "display_user_text": display_text,
             "reply_text": reply_text,
             "audio_base64": audio_base64
         }
-    # ===================================================================
 
+# ============================================================================
+# 싱글톤 및 Blueprint
+# ============================================================================
 
-# --- 싱글톤 및 Blueprint (변경 없음) ---
-_singleton: Optional[VoiceAssistant] = None
-
+_assistant: Optional[VoiceAssistant] = None
 def get_assistant() -> VoiceAssistant:
-    """VoiceAssistant 싱글톤 객체를 반환합니다."""
-    global _singleton
-    if _singleton is None:
-        _singleton = VoiceAssistant()
-    return _singleton
-
+    global _assistant
+    if _assistant is None: _assistant = VoiceAssistant()
+    return _assistant
 
 voice_bp = Blueprint("voice", __name__)
-
-
 @voice_bp.route("/api/voice/process_ptt", methods=["POST"])
-def api_voice_process_ptt():
-    """PTT 오디오 파일을 받아 처리하고 JSON 응답을 반환하는 API"""
-    va = get_assistant()
-    
+def api_process_ptt():
+    assistant = get_assistant()
     audio_file = request.files.get('audio')
     if not audio_file:
-        return jsonify({"ok": False, "error": "No audio file provided"}), 400
-
-    response_data = va.process_ptt_audio(audio_file)
-
-    if not response_data.get("ok"):
-        return jsonify({"ok": False, "error": "Failed to process audio"}), 500
-
-    return jsonify(response_data)
+        return jsonify({"ok": False, "error": "오디오 파일 없음"}), 400
+    
+    result = assistant.process_audio(audio_file)
+    return jsonify(result)
