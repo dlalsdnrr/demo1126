@@ -1,0 +1,37 @@
+# Flask 웹 프레임워크
+Flask
+
+# 환경 변수 관리 (.env 파일 지원)
+python-dotenv
+
+# HTTP 요청 라이브러리
+requests
+
+# 시리얼 통신 (아두이노/다이나믹셀)
+pyserial
+
+# 음성 인식 (STT - Faster Whisper)
+faster-whisper
+sounddevice
+numpy
+
+# 음성 합성 (TTS)
+gTTS
+pydub
+pyaudioop  # Python 3.13+ 호환
+edge-tts
+
+# 노이즈 제거 (선택, 시끄러운 환경에서 권장)
+noisereduce
+
+# Gemini AI (응답 생성)
+google-generativeai
+
+# 날씨 API
+requests
+
+# VAD (Voice Activity Detection)
+webrtcvad
+
+smbus2>=0.4.3
+

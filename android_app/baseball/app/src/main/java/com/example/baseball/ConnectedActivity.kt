@@ -8,6 +8,10 @@ import android.widget.*
 import androidx.activity.ComponentActivity
 import com.example.baseball.R
 import java.util.*
+import android.view.View
+import android.graphics.Color
+import android.graphics.BitmapFactory
+
 
 class ConnectedActivity : ComponentActivity() {
 
@@ -62,42 +66,39 @@ class ConnectedActivity : ComponentActivity() {
 
         ),
         "KT" to mapOf(
-            "김범석" to "KIM_BEOMSEOK",
-            "김성우" to "KIM_SUNGWOO",
-            "김준태" to "KIM_JUNTAE",
-            "박동원" to "PARK_DONGWON",
-            "이주헌" to "LEE_JUHEON",
-            "이한림" to "LEE_HANLIM",
+            "강백호" to "KANG_BAEKHO",
+            "강현우" to "KANG_HYEONWOO",
+            "김민석" to "KIM_MINSEOK",
+            "장성우" to "JANG_SEONGWOO",
+            "조대현" to "JO_DAEHYEON",
+            "강민성" to "KANG_MINSEONG",
 
-            "구본혁" to "KOO_BONHYUK",
-            "김민수" to "KIM_MINSOO",
-            "김성진" to "KIM_SUNGJIN",
-            "김주성" to "KIM_JUSUNG",
-            "문보경" to "MOON_BOKYUNG",
-            "문정빈" to "MOON_JUNGBIN",
-            "손용준" to "SON_YONGJUN",
-            "신민재" to "SHIN_MINJAE",
-            "오스틴" to "AUSTIN",
-            "오지환" to "OH_JIHWAN",
-            "이영빈" to "LEE_YOUNGBIN",
-            "이태훈" to "LEE_TAEHOON",
-            "천성호" to "CHEON_SUNGHO",
-            "김대원" to "KIM_DAEWON",
+            "권동진" to "KWON_DONGJIN",
+            "김상수" to "KIM_SANGSOO",
+            "문상철" to "MOON_SANCHEOL",
+            "박민석" to "PARK_MINSEOK",
+            "오서진" to "OH_SEOJIN",
+            "오윤석" to "OH_YOONSEOK",
+            "오재일" to "OH_JAEIL",
+            "윤준혁" to "YOON_JUNHYEOK",
+            "이호연" to "LEE_HOYEON",
+            "장준원" to "JANG_JUNWON",
+            "허경민" to "HEO_GYUNGMIN",
+            "황재균" to "HWANG_JAEGEUN",
+            "김건형" to "KIM_GUNGYUNG",
+            "김민혁" to "KIM_MINHYEOK",
 
-            "김현수" to "KIM_HYUNSOO",
-            "김현종" to "KIM_HYUNJONG",
-            "문성주" to "MOON_SUNGJOO",
-            "박관우" to "PARK_GWANWOO",
-            "박해민" to "PARK_HAEMIN",
-            "서영준" to "SEO_YOUNGJUN",
-            "송찬의" to "SONG_CHANYI",
-            "안익훈" to "AN_IKHOON",
-            "최승민" to "CHOI_SEUNGMIN",
-            "최원영" to "CHOI_WONYOUNG",
-            "함창건" to "HAM_CHANGGEON",
-            "홍창기" to "HONG_CHANGKI",
-            "최명경" to "CHOI_MYUNGKYUNG",
-            "이재원" to "LEE_JAEWON"
+            "김병준" to "KIM_BYUNGJUN",
+            "박민석" to "PARK_MINSEOK",
+            "배정대" to "BAE_JUNGDAE",
+            "송민섭" to "SONG_MINSUB",
+            "스티븐슨" to "STEVENSEN",
+            "안치영" to "AHN_CHIYEONG",
+            "안현민" to "AHN_HYEONMIN",
+            "유준규" to "YOO_JUNGUE",
+            "이정훈" to "LEE_JEONGHUN",
+            "장진혁" to "JANG_JINHYUK",
+            "최성민" to "CHOI_SEONGMIN"
 
 
         ),
@@ -120,7 +121,6 @@ class ConnectedActivity : ComponentActivity() {
             "박상준" to "PARK_SANGJUN",
             "박찬호" to "PARK_CHANHO",
             "변우혁" to "BYUN_WOOHYUK",
-            "서건창" to "SEO_GEONCHANG",
             "염준현" to "YEOM_JUNHYUN",
             "오선우" to "OH_SUNWOO",
             "오정환" to "OH_JUNGHWAN",
@@ -138,10 +138,8 @@ class ConnectedActivity : ComponentActivity() {
             "김석환" to "KIM_SEOKHWAN",
             "김호령" to "KIM_HORYEONG",
             "나성범" to "NA_SUNGBEOM",
-            "박재욱" to "PARK_JAEWOOK",
             "박정우" to "PARK_JUNGWOO",
             "박현" to "PARK_HYUN",
-            "예진원" to "YE_JINWON",
             "이영재" to "LEE_YOUNGJAE",
             "이창진" to "LEE_CHANGJIN",
             "최형우" to "CHOI_HYUNGWOO",
@@ -153,21 +151,21 @@ class ConnectedActivity : ComponentActivity() {
             // --- 삼성 라이온즈 ---
             "박병호" to "PARK_BYUNGHO",
             "강한울" to "KANG_HANUL",
-            "적병우" to "JEOK_BYUNGWOO",
+            "전병우" to "JEON_BYUNGWOO",
             "안주형" to "AN_JOOHYUNG",
-            "류시현" to "RYU_SIHYEON",
-            "피렐라" to "PIRELLA",
-            "이장형" to "LEE_JANGHYUNG",
-            "곽민규" to "KWAK_MINGYU",
+            "류지혁" to "RYU_JIHYEOK",
+            "디아즈" to "DIAZ",
+            "이창용" to "LEE_CHANGYONG",
+            "공민규" to "GONG_MINGYU",
             "양우현" to "YANG_WOOHYUN",
             "이해승" to "LEE_HAESEUNG",
-            "육현석" to "YUK_HYEONSEOK",
-            "이제현" to "LEE_JAEHYUN",
-            "양훈근" to "YANG_HOONGEUN",
+            "오현석" to "OH_HYEONSEOK",
+            "이재현" to "LEE_JAEHYUN",
+            "양도근" to "YANG_DOGEUN",
             "김영웅" to "KIM_YOUNGWOONG",
             "박장민" to "PARK_JANGMIN",
             "조민성" to "CHO_MINSEONG",
-            "김세형" to "KIM_SEHYEONG",
+            "김재형" to "KIM_JAEYEONG",
             "김상준" to "KIM_SANGJUN",
             "강민성" to "KANG_MINSEONG",
             "심재훈" to "SHIM_JAEHOON",
@@ -177,17 +175,16 @@ class ConnectedActivity : ComponentActivity() {
             "구자욱" to "KOO_JAWOOK",
             "이성규" to "LEE_SUNGKYU",
             "김태훈" to "KIM_TAEHOON",
-            "윤정빈" to "YOON_JUNGBIN",
             "김태근" to "KIM_TAEGEUN",
             "홍현빈" to "HONG_HYEONBIN",
             "김성윤" to "KIM_SUNGYOON",
             "박승규" to "PARK_SEUNGKYU",
             "강준서" to "KANG_JUNSEO",
             "김지찬" to "KIM_JICHAN",
-            "주하늘" to "JOO_HANEUL",
+            "주한울" to "JOO_HANOOL",
             "김상민" to "KIM_SANGMIN",
             "함수호" to "HAM_SUHO",
-            "이진홍" to "LEE_JINHONG",
+            "이진용" to "LEE_JINYONG",
 
             "강민호" to "KANG_MINHO",
             "김민수" to "KIM_MINSOO",
@@ -210,10 +207,9 @@ class ConnectedActivity : ComponentActivity() {
             "박준영" to "PARK_JUNYOUNG",
             "박지훈" to "PARK_JIHOON",
             "양석환" to "YANG_SEOKHWAN",
-            "양찬열" to "YANG_CHANYEOL",
-            "여도건" to "YEO_DOGEON",
-            "오현진" to "OH_HYUNJIN",
-            "이로운" to "LEE_ROWOON",
+            "여동건" to "YEO_DONGEON",
+            "오명진" to "OH_MYUNGJIN",
+            "이선우" to "LEE_SEONWOO",
             "이유찬" to "LEE_YOOCHAN",
             "임종성" to "LIM_JONGSUNG",
             "김기연" to "KIM_GIYEON",
@@ -222,12 +218,10 @@ class ConnectedActivity : ComponentActivity() {
             "박민준" to "PARK_MINJUN",
             "박성재" to "PARK_SUNGJAE",
             "양의지" to "YANG_EUIJI",
-            "정승진" to "JUNG_SEUNGJIN",
             "장승현" to "JANG_SEUNGHYUN",
-            "전준우" to "JEON_JUNWOO",
             "김대한" to "KIM_DAEHAN",
             "김민석" to "KIM_MINSEOK",
-            "김태헌" to "KIM_TAEHEON",
+            "김인태" to "KIM_INTAE",
             "김재환" to "KIM_JAEHWAN",
             "전다민" to "JEON_DAMIN",
             "정수빈" to "JUNG_SOOBIN",
@@ -307,7 +301,7 @@ class ConnectedActivity : ComponentActivity() {
             "노진혁" to "NO_JINHYUK",
             "박승욱" to "PARK_SEUNGWOOK",
             "박지훈" to "PARK_JIHOON",
-            "박창형" to "PARK_CHANGHYUNG",
+            "박찬형" to "PARK_CHANHYUNG",
             "배인혁" to "BAE_INHYUK",
             "손호영" to "SON_HOYOUNG",
             "신윤후" to "SHIN_YUNHOO",
@@ -318,14 +312,14 @@ class ConnectedActivity : ComponentActivity() {
             "전민재" to "JEON_MINJAE",
             "정훈" to "JUNG_HOON",
             "최민규" to "CHOI_MINGYU",
-            "최홍" to "CHOI_HONG",
+            "최항" to "CHOI_HANG",
             "한태양" to "HAN_TAEYANG",
 
             "김대현" to "KIM_DAEHYUN",
             "김동혁" to "KIM_DONGHYUK",
             "김동현" to "KIM_DONGHYUN",
             "박건" to "PARK_GEON",
-            "빅터 레예스" to "VICTOR_REYES",
+            "빅터 레이예스" to "VICTOR_REYES",
             "윤동희" to "YOON_DONGHEE",
             "윤수녕" to "YOON_SOONYUNG",
             "이상화" to "LEE_SANGHWA",
@@ -342,7 +336,7 @@ class ConnectedActivity : ComponentActivity() {
         "한화" to mapOf(
 // --- 포수 ---
             // --- 한화 이글스 ---
-            "허광회" to "HEO_GWANGHOE",
+            "허관회" to "HEO_GWANHOE",
             "최재훈" to "CHOI_JAEHOON",
             "이재원" to "LEE_JAEWON",
             "장규현" to "JANG_GYUHYEON",
@@ -396,8 +390,7 @@ class ConnectedActivity : ComponentActivity() {
             "김형준" to "KIM_HYEONGJUN",
             "김정호" to "KIM_JUNGHO",
             "박성재" to "PARK_SEONGJAE",
-            "김동헌" to "KIM_DONGHEON",
-            "김태호" to "KIM_TAEHO",
+            "김동현" to "KIM_DONGHEON",
             "신민우" to "SHIN_MINWOO",
 
             "박민우" to "PARK_MINWOO",
@@ -420,8 +413,7 @@ class ConnectedActivity : ComponentActivity() {
             "신성호" to "SHIN_SEONGHO",
             "이한" to "LEE_HAN",
             "유재현" to "YOO_JAEHYUN",
-            "조준원" to "CHO_JUNWON",
-            "최보성" to "CHOI_BOSEONG",
+            "조효원" to "CHO_JUNWON",
 
             "송승환" to "SONG_SEUNGHWAN",
             "천재환" to "CHEON_JAEHWAN",
@@ -434,8 +426,8 @@ class ConnectedActivity : ComponentActivity() {
             "이우성" to "LEE_WOOSEONG",
             "고승완" to "GO_SEUNGWAN",
             "김범준" to "KIM_BUMJUN",
-            "오장환" to "OH_JANGHWAN",
-            "양가운솔" to "YANG_GAUNSOL",
+            "오장한" to "OH_JANGHWAN",
+            "양가온솔" to "YANG_GAUNSOL",
             "조창연" to "CHO_CHANGYEON"
 
         )
@@ -505,26 +497,156 @@ class ConnectedActivity : ComponentActivity() {
     }
 
     // ✅ 구단 목록 표시
+    // ✅ 구단 목록 표시
     private fun showTeamList() {
         layout.removeAllViews()
 
         val title = TextView(this).apply {
-            text = "구단 선택"
+            text = "응원하실 구단을 선택해주세요"
             textSize = 22f
             setPadding(0, 0, 0, 16)
         }
         layout.addView(title)
 
-        for (team in teamPlayers.keys) {
-            val teamButton = Button(this).apply {
-                text = team
-                textSize = 18f
+        // ✅ 각 구단별 버튼 생성 (2열 배치)
+        val teams = teamPlayers.keys.toList()
+        for (i in teams.indices step 2) {
+            val rowLayout = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER
             }
-            teamButton.setOnClickListener {
-                showPlayersForTeam(team)
+
+            val buttonParams = LinearLayout.LayoutParams(0, 220, 1f).apply {
+                setMargins(30, 20, 30, 20)
             }
-            layout.addView(teamButton)
+
+            fun createTeamButton(teamName: String): LinearLayout {
+                val teamLayout = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+
+                    // ✅ 구단별 색상
+                    val colorHex = when (teamName) {
+                        "LG" -> "#C30452"
+                        "KT" -> "#000000"
+                        "KIA" -> "#E61E2B"
+                        "삼성" -> "#074CA1"
+                        "두산" -> "#131230"
+                        "SSG" -> "#E71E26"
+                        "롯데" -> "#002955"
+                        "한화" -> "#F15A22"
+                        "NC" -> "#1D467C"
+                        "키움" -> "#830000"
+                        else -> "#808080"
+                    }
+
+                    // ✅ 모서리 둥근 배경 drawable 생성
+                    val backgroundDrawable = android.graphics.drawable.GradientDrawable().apply {
+                        setColor(android.graphics.Color.parseColor(colorHex)) // 배경색
+                        cornerRadius = 40f  // ✅ 모서리 둥근 정도(px) — 숫자 키우면 더 둥글어짐
+                    }
+
+                    background = backgroundDrawable  // ✅ 배경으로 설정
+
+                    layoutParams = buttonParams
+                    setPadding(20, 10, 20, 10)
+                    elevation = 8f  // 살짝 입체감(그림자 효과)
+                }
+
+                // ✅ 구단 로고
+                val imageView = ImageView(this).apply {
+                    setImageResource(
+                        when (teamName) {
+                            "LG" -> R.drawable.lg
+                            "KT" -> R.drawable.kt
+                            "KIA" -> R.drawable.kia
+                            "삼성" -> R.drawable.samsung
+                            "두산" -> R.drawable.doosan
+                            "SSG" -> R.drawable.ssg
+                            "롯데" -> R.drawable.lotte
+                            "한화" -> R.drawable.hanwha
+                            "NC" -> R.drawable.nc
+                            "키움" -> R.drawable.kiwoom
+                            else -> 0
+                        }
+                    )
+                    layoutParams = LinearLayout.LayoutParams(140, 140).apply {
+                        rightMargin = 20
+                    }
+                }
+
+                // ✅ 구단 이름
+                val textView = TextView(this).apply {
+                    text = teamName
+                    textSize = 20f
+                    setTextColor(android.graphics.Color.WHITE)
+                }
+
+                teamLayout.addView(imageView)
+                teamLayout.addView(textView)
+
+                teamLayout.setOnClickListener {
+                    showCheerOptionsForTeam(teamName)
+                }
+
+
+                return teamLayout
+            }
+
+
+
+            val team1 = teams[i]
+            rowLayout.addView(createTeamButton(team1))
+
+            if (i + 1 < teams.size) {
+                val team2 = teams[i + 1]
+                rowLayout.addView(createTeamButton(team2))
+            }
+
+            layout.addView(rowLayout)
         }
+
+
+
+        // ✅ 구단 버튼들과 조종 버튼 사이에 회색 구분선 + "로봇 이동" 텍스트 추가
+
+// 1️⃣ 먼저 회색 구분선
+        val divider = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                3 // 선 두께(px)
+            ).apply {
+                topMargin = 40
+                bottomMargin = 20
+                leftMargin = 80
+                rightMargin = 80
+            }
+            setBackgroundColor(Color.parseColor("#CCCCCC")) // 연회색
+        }
+        layout.addView(divider)
+
+// 2️⃣ 그 아래 "로봇 이동" 텍스트
+        val moveTitle = TextView(this).apply {
+            text = "로봇 이동"
+            textSize = 22f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(Color.parseColor("#333333"))
+            gravity = android.view.Gravity.CENTER
+
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = 10
+                bottomMargin = 30
+            }
+        }
+        layout.addView(moveTitle)
+
+
+
+
+        // ====== 🔽 방향 버튼 추가 영역 ======
         // ====== 🔽 방향 버튼 추가 영역 ======
         val buttonLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -532,7 +654,16 @@ class ConnectedActivity : ComponentActivity() {
             gravity = android.view.Gravity.CENTER_HORIZONTAL
         }
 
-        // 🔁 버튼을 누르고 있는 동안 반복 전송 함수
+        // ✅ 공통 버튼 배경 (모서리 둥근 스타일)
+        fun createRoundedBackground(color: Int): android.graphics.drawable.GradientDrawable {
+            return android.graphics.drawable.GradientDrawable().apply {
+                setColor(color)           // 배경색
+                cornerRadius = 60f        // ✅ 모서리 둥근 정도(px)
+                setStroke(4, Color.DKGRAY) // 테두리선 (진한 회색)
+            }
+        }
+
+        // ✅ 버튼 반복 전송 설정 (기존 코드 그대로 유지)
         fun setRepeatSend(button: Button, message: String) {
             var timer: Timer? = null
             button.setOnTouchListener { _, event ->
@@ -541,11 +672,9 @@ class ConnectedActivity : ComponentActivity() {
                         timer = Timer()
                         timer?.schedule(object : TimerTask() {
                             override fun run() {
-                                runOnUiThread {
-                                    sendMessageToPi(message)
-                                }
+                                runOnUiThread { sendMessageToPi(message) }
                             }
-                        }, 0, 50) // 100ms마다 전송
+                        }, 0, 50)
                     }
                     android.view.MotionEvent.ACTION_UP,
                     android.view.MotionEvent.ACTION_CANCEL -> {
@@ -557,20 +686,23 @@ class ConnectedActivity : ComponentActivity() {
             }
         }
 
-        // ✅ 버튼 크기 통일
         val buttonWidth = 250
         val buttonHeight = 180
-        val buttonParams = LinearLayout.LayoutParams(buttonWidth, buttonHeight)
+        val buttonParams = LinearLayout.LayoutParams(buttonWidth, buttonHeight).apply {
+            setMargins(20, 10, 20, 10)
+        }
 
-        // 🔼 위쪽 화살표 버튼
+// ✅ 위쪽(앞으로 이동) 버튼
         val upButton = Button(this).apply {
             text = "▲"
             textSize = 26f
             layoutParams = buttonParams
+            background = createRoundedBackground(Color.parseColor("#4CAF50")) // 초록색
+            setTextColor(Color.WHITE)
         }
         setRepeatSend(upButton, "front")
 
-        // ◀ ▶ 버튼
+// ✅ 좌우 버튼 레이아웃
         val leftRightLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER
@@ -580,6 +712,8 @@ class ConnectedActivity : ComponentActivity() {
             text = "◀"
             textSize = 26f
             layoutParams = buttonParams
+            background = createRoundedBackground(Color.parseColor("#2196F3")) // 파란색
+            setTextColor(Color.WHITE)
         }
         setRepeatSend(leftButton, "left")
 
@@ -587,18 +721,25 @@ class ConnectedActivity : ComponentActivity() {
             text = "▶"
             textSize = 26f
             layoutParams = buttonParams
+            background = createRoundedBackground(Color.parseColor("#2196F3")) // 파란색
+            setTextColor(Color.WHITE)
         }
         setRepeatSend(rightButton, "right")
 
+// 좌우 버튼 간 여백 추가
         leftRightLayout.addView(leftButton)
-        leftRightLayout.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(60, 0) })
+        leftRightLayout.addView(Space(this).apply {
+            layoutParams = LinearLayout.LayoutParams(60, 0)
+        })
         leftRightLayout.addView(rightButton)
 
-        // 버튼 순서대로 배치
+// 전체 배치
         buttonLayout.addView(upButton)
         buttonLayout.addView(leftRightLayout)
         layout.addView(buttonLayout)
+
     }
+
 
 
 
@@ -611,33 +752,111 @@ class ConnectedActivity : ComponentActivity() {
 
         val title = TextView(this).apply {
             text = "$team 선수 목록"
-            textSize = 20f
+            textSize = 22f
             setPadding(0, 20, 0, 10)
+            gravity = android.view.Gravity.CENTER
         }
         layout.addView(title)
 
         val players = teamPlayers[team] ?: emptyMap()
+        val playerList = players.toList()
 
-        for ((korName, engName) in players) {
-            val playerButton = Button(this).apply {
-                text = korName
-                textSize = 16f
+        // ✅ 2열 구조 표시
+        for (i in playerList.indices step 2) {
+            val rowLayout = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER
             }
-            playerButton.setOnClickListener {
-                sendMessageToPi(engName)   // 영어 이름 전송
+
+            val buttonParams = LinearLayout.LayoutParams(0, 400, 1f).apply {
+                setMargins(20, 20, 20, 20)
             }
-            layout.addView(playerButton)
+
+            fun createPlayerCard(korName: String, engName: String): LinearLayout {
+                val container = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = android.view.Gravity.CENTER
+                    layoutParams = buttonParams
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        setColor(Color.WHITE)
+                        cornerRadius = 40f
+                        setStroke(4, Color.LTGRAY)
+                    }
+                    setPadding(10, 10, 10, 10)
+                    elevation = 8f
+                }
+
+                // ✅ team 이름을 소문자로 바꿔 assets 경로 자동 설정
+                val teamFolder = team.lowercase(Locale.getDefault())
+
+                val imageView = ImageView(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, 300
+                    )
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    try {
+                        val inputStream = try {
+                            assets.open("players/$teamFolder/${korName}.png")
+                        } catch (e1: Exception) {
+                            try {
+                                assets.open("players/$teamFolder/${korName}.jpg")
+                            } catch (e2: Exception) {
+                                try {
+                                    assets.open("players/$teamFolder/${korName}.jpeg")
+                                } catch (e3: Exception) {
+                                    assets.open("players/$teamFolder/${korName}.webp")
+                                }
+                            }
+                        }
+                        val bitmap = BitmapFactory.decodeStream(inputStream)
+                        setImageBitmap(bitmap)
+                        inputStream.close()
+                    } catch (e: Exception) {
+                        setBackgroundColor(Color.LTGRAY)
+                    }
+                }
+
+                val nameText = TextView(this).apply {
+                    text = korName
+                    textSize = 18f
+                    gravity = android.view.Gravity.CENTER
+                    setTextColor(Color.BLACK)
+                }
+
+                container.addView(imageView)
+                container.addView(nameText)
+
+                container.setOnClickListener {
+                    sendMessageToPi(engName)
+                }
+
+                return container
+            }
+
+            val (kor1, eng1) = playerList[i]
+            rowLayout.addView(createPlayerCard(kor1, eng1))
+
+            if (i + 1 < playerList.size) {
+                val (kor2, eng2) = playerList[i + 1]
+                rowLayout.addView(createPlayerCard(kor2, eng2))
+            }
+
+            layout.addView(rowLayout)
         }
 
         val backButton = Button(this).apply {
-            text = "◀ 구단 목록으로"
-            textSize = 16f
+            text = "◀ 응원 메뉴로"
+            textSize = 18f
         }
         backButton.setOnClickListener {
-            showTeamList()
+            showCheerOptionsForTeam(team)
         }
         layout.addView(backButton)
+
     }
+
+
+
 
 
     // ✅ BLE 전송 함수
@@ -658,4 +877,188 @@ class ConnectedActivity : ComponentActivity() {
         val toastText = if (success) "[$message] 전송됨" else "전송 실패"
         Toast.makeText(this, toastText, Toast.LENGTH_SHORT).show()
     }
+
+    @SuppressLint("MissingPermission")
+    private fun showCheerOptionsForTeam(team: String) {
+        layout.removeAllViews()
+
+        val frameLayout = FrameLayout(this)
+        layout.addView(frameLayout)
+
+        // ⚾ 배경 이미지 (야구장)
+        val backgroundImage = ImageView(this).apply {
+            setImageResource(R.drawable.baseball_field)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            alpha = 1.0f
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = 80
+            }
+        }
+        frameLayout.addView(backgroundImage)
+
+        // ⚾ 구단별 로고 오버레이 (✅ 추가된 부분)
+        val teamOverlay = ImageView(this).apply {
+            setImageResource(
+                when (team) {
+                    "LG" -> R.drawable.lg
+                    "KT" -> R.drawable.kt
+                    "KIA" -> R.drawable.kia
+                    "삼성" -> R.drawable.samsung
+                    "두산" -> R.drawable.doosan
+                    "SSG" -> R.drawable.ssg
+                    "롯데" -> R.drawable.lotte
+                    "한화" -> R.drawable.hanwha
+                    "NC" -> R.drawable.nc
+                    "키움" -> R.drawable.kiwoom
+                    else -> R.drawable.kbo_logo
+                }
+            )
+            layoutParams = FrameLayout.LayoutParams(
+                200, 200
+            ).apply {
+                gravity = android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL
+                topMargin = 100
+            }
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            alpha = 1.0f
+        }
+        frameLayout.addView(teamOverlay)
+
+        // ⚾ 버튼 등 나머지 기존 코드 계속 ↓↓↓
+
+
+        // ✅ 홈런 버튼 (전광판 위치)
+        val homeRunBtn = Button(this).apply {
+            text = "홈런"
+            textSize = 16f
+            background = roundedButton(Color.parseColor("#D32F2F"))
+            setTextColor(Color.WHITE)
+            layoutParams = FrameLayout.LayoutParams(220, 130).apply {
+                gravity = android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL
+                topMargin = 500   // 전광판 쪽으로
+            }
+            setOnClickListener { sendMessageToPi("HOMERUN") }
+        }
+        frameLayout.addView(homeRunBtn)
+
+        // ✅ 1루타 버튼
+        val hit1Btn = Button(this).apply {
+            text = "1루타"
+            textSize = 15f
+            background = roundedButton(Color.parseColor("#1976D2"))
+            setTextColor(Color.WHITE)
+            layoutParams = FrameLayout.LayoutParams(180, 120).apply {
+                gravity = android.view.Gravity.CENTER
+                leftMargin = 200  // 오른쪽으로
+                topMargin = 150   // 중앙보다 아래쪽
+            }
+            setOnClickListener { sendMessageToPi("HIT1") }
+        }
+        frameLayout.addView(hit1Btn)
+
+        // ✅ 2루타 버튼
+        val hit2Btn = Button(this).apply {
+            text = "2루타"
+            textSize = 15f
+            background = roundedButton(Color.parseColor("#1976D2"))
+            setTextColor(Color.WHITE)
+            layoutParams = FrameLayout.LayoutParams(180, 120).apply {
+                gravity = android.view.Gravity.CENTER
+                topMargin = 80   // 위쪽 (2루 근처)
+            }
+            setOnClickListener { sendMessageToPi("HIT2") }
+        }
+        frameLayout.addView(hit2Btn)
+
+        // ✅ 3루타 버튼
+        val hit3Btn = Button(this).apply {
+            text = "3루타"
+            textSize = 15f
+            background = roundedButton(Color.parseColor("#1976D2"))
+            setTextColor(Color.WHITE)
+            layoutParams = FrameLayout.LayoutParams(180, 120).apply {
+                gravity = android.view.Gravity.CENTER
+                rightMargin = 200  // 왼쪽으로
+                topMargin = 150
+            }
+            setOnClickListener { sendMessageToPi("HIT3") }
+        }
+        frameLayout.addView(hit3Btn)
+
+        // ✅ 아웃 버튼 (아래쪽)
+        val outBtn = Button(this).apply {
+            text = "아웃"
+            textSize = 16f
+            background = roundedButton(Color.parseColor("#F57C00"))
+            setTextColor(Color.WHITE)
+            layoutParams = FrameLayout.LayoutParams(250, 130).apply {
+                gravity = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
+                bottomMargin = 280
+            }
+            setOnClickListener {
+                // 팀 이름을 영어 대문자로 변환 후 조합 (ex: KT → KTOUT)
+                val teamCode = when (team) {
+                    "LG" -> "LG"
+                    "KT" -> "KT"
+                    "KIA" -> "KIA"
+                    "삼성" -> "SS"
+                    "두산" -> "DS"
+                    "SSG" -> "SSG"
+                    "롯데" -> "LT"
+                    "한화" -> "HH"
+                    "NC" -> "NC"
+                    "키움" -> "KW"
+                    else -> "TEAM"
+                }
+                sendMessageToPi("${teamCode}OUT")
+            }
+
+        }
+        frameLayout.addView(outBtn)
+
+        // ✅ 선수 응원 버튼 (가장 아래)
+        val playerBtn = Button(this).apply {
+            text = "선수 응원"
+            textSize = 18f
+            background = roundedButton(Color.parseColor("#388E3C"))
+            setTextColor(Color.WHITE)
+            layoutParams = FrameLayout.LayoutParams(350, 150).apply {
+                gravity = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
+                bottomMargin = 100
+            }
+            setOnClickListener { showPlayersForTeam(team) }
+        }
+        frameLayout.addView(playerBtn)
+
+        // ✅ 뒤로가기 버튼
+        val backBtn = Button(this).apply {
+            text = "◀ 구단 목록으로"
+            textSize = 16f
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                leftMargin = 40
+                topMargin = 40
+            }
+            setOnClickListener { showTeamList() }
+        }
+        frameLayout.addView(backBtn)
+    }
+
+    // ✅ 둥근 버튼 스타일 재사용 함수
+    private fun roundedButton(color: Int): android.graphics.drawable.GradientDrawable {
+        return android.graphics.drawable.GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = 50f
+        }
+    }
+
+
+
 }
+

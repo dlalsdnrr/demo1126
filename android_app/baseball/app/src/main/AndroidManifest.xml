@@ -29,16 +29,15 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="CheerBot"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Baseball">
 
-        <!-- ✅ 메인 액티비티 -->
+        <!-- ✅ 1️⃣ 스플래시 화면 (앱 시작 시 표시되는 화면) -->
         <activity
-            android:name=".MainActivity"
+            android:name=".SplashActivity"
             android:exported="true"
-            android:label="@string/app_name"
             android:theme="@style/Theme.Baseball">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -46,7 +45,14 @@
             </intent-filter>
         </activity>
 
-        <!-- ✅ 새 창 (BLE 연결 성공 시 전환) -->
+        <!-- ✅ 2️⃣ 메인 화면 (Start Scan 등 UI 표시) -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Baseball" />
+
+        <!-- ✅ 3️⃣ BLE 연결 성공 시 전환되는 화면 -->
         <activity
             android:name=".ConnectedActivity"
             android:exported="false"

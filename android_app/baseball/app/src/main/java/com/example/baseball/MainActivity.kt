@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import com.example.baseball.ui.theme.BaseballTheme
 import java.util.*
+import androidx.compose.ui.Alignment
 
 class MainActivity : ComponentActivity() {
 
@@ -63,7 +64,9 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier
                             .padding(padding)
                             .fillMaxSize()
-                            .padding(16.dp)
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.Top,              // ✅ 상단 정렬
+                        horizontalAlignment = Alignment.CenterHorizontally  // ✅ 가로 중앙 정렬
                     ) {
                         Button(onClick = {
                             if (!scanning) {
@@ -78,11 +81,11 @@ class MainActivity : ComponentActivity() {
                                 scanning = false
                             }
                         }) {
-                            Text(if (scanning) "Stop Scan" else "Start Scan")
+                            Text(if (scanning) "연결 중지" else "로봇과 연결하세요")  // ✅ 한글 텍스트
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("발견된 기기:", style = MaterialTheme.typography.titleMedium)
+                        Text("발견된 기기", style = MaterialTheme.typography.titleMedium)
 
                         LazyColumn {
                             items(devices) { device ->
@@ -99,6 +102,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+
             }
         }
     }
