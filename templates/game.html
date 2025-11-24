@@ -48,6 +48,10 @@
           </div>
 
           <div class="menu-last-play" id="last-play-text">경기 시작</div>
+
+          <div class="menu-actions" id="script-controls" hidden>
+            <button type="button" id="script-reset-btn" aria-label="경기내용">경기내용</button>
+          </div>
         </div>
       </aside>
 
@@ -107,6 +111,14 @@
     <!-- 중앙 팝업 -->
     <div class="popup-overlay" id="popup-overlay">
       <div class="popup-content" id="popup-content"></div>
+    </div>
+
+    <!-- 데모 시작 오버레이 -->
+    <div class="demo-start-overlay" id="demo-start-overlay">
+      <div class="demo-start-card">
+        <p class="demo-start-text">버튼을 눌러 데모 경기를 시작하세요</p>
+        <button type="button" id="demo-start-btn">경기 시작</button>
+      </div>
     </div>
   </div>
 {% endblock %}

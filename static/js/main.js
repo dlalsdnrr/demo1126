@@ -1,7 +1,14 @@
 (() => {
   const POLL_MS = 2000;
   let currentGameId = null; // 서버 설정(.env)에서 로드됩니다.
+  let clientMode = 'random';
+  let scriptId = null;
   let lastPlayText = ''; // 이전 플레이 텍스트 저장용
+  let scriptResetAttached = false;
+  let demoStarted = false;
+  let pollingActive = false;
+  let tickTimer = null;
+  let demoStartInitialized = false;
 
   const el = {
       nameAway: document.getElementById('name-away'),
@@ -56,12 +63,22 @@
           lf: document.getElementById('fielder-name-lf'),
           cf: document.getElementById('fielder-name-cf'),
           rf: document.getElementById('fielder-name-rf')
-      }
+      },
+      scriptControls: document.getElementById('script-controls'),
+      scriptReset: document.getElementById('script-reset-btn'),
+      demoOverlay: document.getElementById('demo-start-overlay'),
+      demoStartBtn: document.getElementById('demo-start-btn')
   };
 
   async function fetchState() {
-      // 게임ID가 있으면 DAUM 프록시, 없으면 로컬 Mock 사용
-      if (currentGameId) {
+      // 모드 우선순위: script > daum > local mock
+      if (clientMode === 'script') {
+          const res = await fetch('/api/scripted-state', { cache: 'no-store' });
+          if (!res.ok) return null;
+          return await res.json();
+      }
+
+      if (clientMode === 'daum' && currentGameId) {
           const url = `/api/daum-state?gameId=${encodeURIComponent(currentGameId)}`;
           const res = await fetch(url, { cache: 'no-store' });
           if (!res.ok) return null;
@@ -98,19 +115,148 @@
       }
   }
 
-  function showPopup(text) {
+  function setScriptControlsVisible(visible) {
+      if (!el.scriptControls) return;
+      el.scriptControls.hidden = !visible;
+  }
+
+  function ensureScriptResetHandler() {
+      if (scriptResetAttached || !el.scriptReset) return;
+      scriptResetAttached = true;
+      const originalLabel = el.scriptReset.textContent || '경기내용';
+      el.scriptReset.addEventListener('click', async () => {
+          if (clientMode !== 'script') return;
+          const button = el.scriptReset;
+          button.disabled = true;
+          button.textContent = '대본 재가동 중...';
+          try {
+              const res = await fetch('/api/scripted/reset', { method: 'POST', cache: 'no-store' });
+              if (!res.ok) throw new Error('reset_failed');
+              lastPlayText = '';
+          } catch (err) {
+              console.error('script reset 실패', err);
+          } finally {
+              button.disabled = false;
+              button.textContent = originalLabel;
+          }
+      });
+  }
+
+  function showDemoOverlay(show) {
+      if (!el.demoOverlay) return;
+      el.demoOverlay.classList.toggle('show', Boolean(show));
+  }
+
+  async function handleDemoStartClick() {
+      if (clientMode !== 'script') {
+          demoStarted = true;
+          showDemoOverlay(false);
+          startPolling(true);
+          return;
+      }
+      const button = el.demoStartBtn;
+      if (button) {
+          button.disabled = true;
+          button.textContent = '시작 준비 중...';
+      }
+      try {
+          const res = await fetch('/api/scripted/reset', { method: 'POST', cache: 'no-store' });
+          if (!res.ok) throw new Error('reset_failed');
+          lastPlayText = '';
+          demoStarted = true;
+          showDemoOverlay(false);
+          startPolling(true);
+      } catch (err) {
+          console.error('데모 시작 실패', err);
+          if (button) {
+              button.textContent = '다시 시작';
+          }
+      } finally {
+          if (button) {
+              button.disabled = false;
+              button.textContent = '경기 시작';
+          }
+      }
+  }
+
+  function setupDemoStartOverlay() {
+      if (clientMode !== 'script') {
+          demoStarted = true;
+          showDemoOverlay(false);
+          startPolling(true);
+          return;
+      }
+      if (!el.demoOverlay || !el.demoStartBtn) {
+          demoStarted = true;
+          startPolling(true);
+          return;
+      }
+      showDemoOverlay(true);
+      if (!demoStartInitialized) {
+          el.demoStartBtn.addEventListener('click', handleDemoStartClick);
+          demoStartInitialized = true;
+      }
+  }
+
+  function stopPolling() {
+      pollingActive = false;
+      if (tickTimer) {
+          clearTimeout(tickTimer);
+          tickTimer = null;
+      }
+  }
+
+  function startPolling(force) {
+      if (clientMode === 'script' && !demoStarted) return;
+      if (pollingActive && !force) return;
+      pollingActive = true;
+      if (tickTimer) {
+          clearTimeout(tickTimer);
+          tickTimer = null;
+      }
+      tick();
+  }
+
+  function scheduleNextTick() {
+      if (!pollingActive) return;
+      tickTimer = setTimeout(tick, POLL_MS);
+  }
+
+  const popupQueue = [];
+  let popupShowing = false;
+
+  function enqueuePopup(text, eventType) {
+      if (!text || text === '경기 시작') return;
+      popupQueue.push({ text, eventType });
+      processPopupQueue();
+  }
+
+  function popupDurationForType(eventType) {
+      if (!eventType) return 2000;
+      const t = eventType.toLowerCase();
+      if (t === 'entrance' || t === 'cheer') return 4500;
+      if (t === 'hr' || t === 'final') return 3000;
+      return 2000;
+  }
+
+  function processPopupQueue() {
+      if (popupShowing) return;
       const overlay = document.getElementById('popup-overlay');
       const content = document.getElementById('popup-content');
+      if (!overlay || !content) return;
+      const next = popupQueue.shift();
+      if (!next) return;
 
-      if (!overlay || !content || !text || text === '경기 시작') return;
-
-      content.textContent = text;
+      popupShowing = true;
+      content.textContent = next.text;
       overlay.classList.add('show');
 
-      // 3초 후 자동으로 숨김
+      const duration = popupDurationForType(next.eventType);
       setTimeout(() => {
           overlay.classList.remove('show');
-      }, 3000);
+          popupShowing = false;
+          setTimeout(processPopupQueue, 200);
+      }, duration);
   }
 
   function updateHalf(half) {
@@ -154,7 +300,7 @@
       // 플레이 텍스트 업데이트 및 팝업 표시
       const currentPlayText = last_event?.description ?? '';
       if (currentPlayText && currentPlayText !== lastPlayText && lastPlayText !== '') {
-          showPopup(currentPlayText);
+          enqueuePopup(currentPlayText, last_event?.type);
       }
       lastPlayText = currentPlayText;
       el.lastPlayText.textContent = currentPlayText;
@@ -164,13 +310,33 @@
   }
 
   async function tick() {
+      if (!pollingActive) return;
       try {
           const state = await fetchState();
           render(state);
       } catch (e) {
           console.error(e);
       } finally {
-          setTimeout(tick, POLL_MS);
+          scheduleNextTick();
+      }
+  }
+
+  function applyServerConfig(data) {
+      currentGameId = data.gameId || null;
+      let mode = (data.mode || '').toString().toLowerCase();
+      if (!mode || mode === 'auto') mode = currentGameId ? 'daum' : 'random';
+      if (mode === 'daum' && !currentGameId) mode = 'random';
+      clientMode = mode;
+      scriptId = data.scriptId || null;
+      if (clientMode === 'script') {
+          console.log('스크립트 모드 활성화:', scriptId || 'demo');
+          setScriptControlsVisible(true);
+          ensureScriptResetHandler();
+          if (data.scriptError) {
+              console.warn('스크립트 초기화 이슈:', data.scriptError);
+          }
+      } else {
+          setScriptControlsVisible(false);
       }
   }
 
@@ -180,9 +346,11 @@
           const res = await fetch('/api/config', { cache: 'no-store' });
           if (res.ok) {
               const data = await res.json();
-              if (data.ok && data.gameId) {
-                  currentGameId = data.gameId;
-                  console.log('게임 ID 로드됨:', currentGameId);
+              if (data && data.ok) {
+                  applyServerConfig(data);
+                  if (clientMode === 'daum' && currentGameId) {
+                      console.log('게임 ID 로드됨:', currentGameId);
+                  }
               }
           }
       } catch (e) {
@@ -193,7 +361,12 @@
   // 시작
   window.addEventListener('DOMContentLoaded', async () => {
       await loadConfig(); // 설정 먼저 로드
-      tick(); // 그 다음 게임 상태 폴링 시작
+      if (clientMode === 'script') {
+          setupDemoStartOverlay();
+      } else {
+          demoStarted = true;
+          startPolling(true);
+      }
   });
 })();
 

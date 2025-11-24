@@ -15,6 +15,7 @@ from flask import Blueprint, jsonify, request
 import google.generativeai as genai
 
 from config import GEMINI_API_KEY, WEATHER_API_KEY
+from game_routes import get_current_state_snapshot
 
 # ============================================================================
 # API 및 모듈 초기화
@@ -422,6 +423,12 @@ class VoiceAssistant:
 
         weather_data = get_yongin_weather()
         player_data_str = json.dumps(self.PLAYERS_DATA, ensure_ascii=False, indent=2)
+        try:
+            current_state = get_current_state_snapshot() or {}
+        except Exception as exc:
+            print(f"⚠ 현재 경기 상태 조회 실패: {exc}")
+            current_state = {}
+        game_state_str = json.dumps(current_state, ensure_ascii=False, indent=2) if current_state else "데이터 없음"
         
         prompt = f"""
         당신은 KBO 리그 삼성 라이온즈와 기아 타이거즈 선수들의 기록에 대해 답하고, 용인의 현재 날씨를 알려주는 친절한 AI 야구 비서입니다.
@@ -431,8 +438,9 @@ class VoiceAssistant:
         2. 답변은 1-2 문장으로 짧게 유지하세요.
         3. 선수 기록 질문은 아래 `선수 기록 데이터`를 기반으로만 답하세요. 데이터에 없는 선수는 "죄송해요, 그 선수의 정보는 아직 없어요."라고 답하세요.
         4. 날씨 질문은 아래 `실시간 용인 날씨` 데이터를 기반으로 답하세요. 날씨 데이터가 없으면 "날씨 정보를 가져올 수 없었어요."라고 답하세요.
-        5. 대화의 맥락과 상관없는 일반적인 질문에는 "저는 야구 전문 비서예요."라고 답하세요.
-        6. 음성이 오인식 될 수 있으니 비슷한 이름의 선수, 기능을 생각해서 답해주세요. ex) 날 쉬었대 -> 날씨어때, 김진찬 -> 김지찬 등
+        5. 현재 경기 상황(점수, 이닝, 주자 등)은 `실시간 경기 상황` 데이터를 참고해 말하세요. 데이터가 없으면 모른다고 솔직하게 말하세요.
+        6. 대화의 맥락과 상관없는 일반적인 질문에는 "저는 야구 전문 비서예요."라고 답하세요.
+        7. 음성이 오인식 될 수 있으니 비슷한 이름의 선수, 기능을 생각해서 답해주세요. ex) 날 쉬었대 -> 날씨어때, 김진찬 -> 김지찬 등
 
         ---
         # 선수 기록 데이터 (JSON):
@@ -440,6 +448,9 @@ class VoiceAssistant:
         ---
         # 실시간 용인 날씨:
         {json.dumps(weather_data, ensure_ascii=False, indent=2) if weather_data else "데이터 없음"}
+        ---
+        # 실시간 경기 상황:
+        {game_state_str}
         ---
 
         # 사용자 질문:

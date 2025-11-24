@@ -6,7 +6,8 @@ from typing import Dict, Any
 
 from flask import Blueprint, jsonify, render_template, request
 from macros_executor import run_macro_by_event_text_async, last_event_to_trigger_text
-from config import BASEBALL_ID
+from config import BASEBALL_ID, GAME_MODE, SCRIPT_ID
+from scripted_game import get_scripted_game, ScriptedGame
 
 
 game_bp = Blueprint("game", __name__)
@@ -29,6 +30,27 @@ def _initial_game_state() -> Dict[str, Any]:
 
 
 game_state: Dict[str, Any] = _initial_game_state()
+
+def _resolve_game_mode() -> str:
+    mode = (GAME_MODE or "auto").strip().lower()
+    if mode in ("auto", "", None):
+        if SCRIPT_ID:
+            return "script"
+        if BASEBALL_ID:
+            return "daum"
+        return "random"
+    return mode
+
+
+ACTIVE_GAME_MODE = _resolve_game_mode()
+
+scripted_game: ScriptedGame | None = None
+scripted_game_error: str | None = None
+if ACTIVE_GAME_MODE == "script":
+    try:
+        scripted_game = get_scripted_game(SCRIPT_ID)
+    except Exception as exc:  # pragma: no cover - config error visibility
+        scripted_game_error = str(exc)
 
 
 def _advance_random_event(state: Dict[str, Any]) -> None:
@@ -150,6 +172,19 @@ def _advance_runners(state: Dict[str, Any], bases_to_advance: int, batting: str)
                 bases[target] = True
 
 
+def _snapshot_state(state: Dict[str, Any]) -> Dict[str, Any]:
+    result = dict(state)
+    result["teams"] = {k: dict(v) for k, v in state.get("teams", {}).items()}
+    result["count"] = dict(state.get("count", {}))
+    result["bases"] = dict(state.get("bases", {}))
+    last_event = state.get("last_event")
+    result["last_event"] = dict(last_event) if isinstance(last_event, dict) else (last_event or None)
+    fielders = state.get("fielders")
+    if isinstance(fielders, dict):
+        result["fielders"] = {k: dict(v) for k, v in fielders.items()}
+    return result
+
+
 @game_bp.route("/")
 def index():
     return render_template("game.html")
@@ -162,12 +197,7 @@ def api_game_state():
     with lock:
         if should_advance:
             _advance_random_event(game_state)
-        # 응답 복제
-        response = dict(game_state)
-        response["teams"] = {k: dict(v) for k, v in game_state["teams"].items()}
-        response["count"] = dict(game_state["count"])
-        response["bases"] = dict(game_state["bases"])
-        response["last_event"] = dict(game_state["last_event"]) if game_state.get("last_event") else None
+        response = _snapshot_state(game_state)
 
     # 락 밖에서 비동기 매크로 트리거 (락 홀드 시간 최소화)
     trigger_text = last_event_to_trigger_text(response.get("last_event"))
@@ -185,9 +215,47 @@ def api_reset():
     return jsonify({"ok": True})
 
 
+@game_bp.route("/api/scripted-state")
+def api_scripted_state():
+    if scripted_game is None:
+        return jsonify({"error": "script_mode_disabled", "detail": scripted_game_error}), 400
+    state = scripted_game.current_state()
+    trigger_text = last_event_to_trigger_text(state.get("last_event"))
+    if trigger_text:
+        run_macro_by_event_text_async(trigger_text)
+    return jsonify(state)
+
+
+@game_bp.route("/api/scripted/reset", methods=["POST"])
+def api_scripted_reset():
+    if scripted_game is None:
+        return jsonify({"error": "script_mode_disabled", "detail": scripted_game_error}), 400
+    scripted_game.reset()
+    return jsonify({"ok": True})
+
+
 @game_bp.route("/api/config")
 def api_config():
     """클라이언트에서 사용할 설정값을 반환합니다."""
-    return jsonify({"ok": True, "gameId": BASEBALL_ID or ""})
+    game_id = "" if ACTIVE_GAME_MODE == "script" else (BASEBALL_ID or "")
+    config_payload = {
+        "ok": True,
+        "gameId": game_id,
+        "mode": ACTIVE_GAME_MODE,
+        "scriptId": SCRIPT_ID if ACTIVE_GAME_MODE == "script" else "",
+        "scriptError": scripted_game_error if ACTIVE_GAME_MODE == "script" else "",
+    }
+    return jsonify(config_payload)
+
+
+def get_current_state_snapshot() -> Dict[str, Any]:
+    """Voice/other modules에서 현재 경기 상황을 참조할 수 있도록 상태를 제공합니다."""
+    if ACTIVE_GAME_MODE == "script" and scripted_game is not None:
+        try:
+            return scripted_game.current_state()
+        except Exception:
+            return {}
+    with lock:
+        return _snapshot_state(game_state)
 
 
