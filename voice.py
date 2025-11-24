@@ -300,7 +300,7 @@ class VoiceAssistant:
                 # (2) 파일에 있는 별명 가져오기
                 self.PLAYER_ALIASES.update(raw_data.get("PLAYER_ALIASES", {}))
                 
-                print(f"✓ 데이터 로드 완료: 총 {len(self.PLAYERS_DATA)}명 (KIA/삼성 통합)")
+                print(f"✓ 데이터 로드 완료: 총 {len(self.PLAYERS_DATA)}명 (KBO_DATA)")
 
         except FileNotFoundError:
             print("⚠️ kbo_data.json 파일이 없습니다.")
