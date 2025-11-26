@@ -130,15 +130,15 @@ def get_yongin_weather() -> Optional[Dict[str, Any]]:
 # --- hello.json 매크로 지원 --------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MACRO_FILES = {
-    "안녕": os.path.join(BASE_DIR, "안녕.json"),
-    "하이파이브": os.path.join(BASE_DIR, "하이파이브.json"),
-    "파이팅": os.path.join(BASE_DIR, "파이팅.json"),
-    "차렷자세": os.path.join(BASE_DIR, "차렷자세.json"),
-    "김지찬 응원가": os.path.join(BASE_DIR, "김지찬 응원가.json"),
-    "김도영 응원가": os.path.join(BASE_DIR, "김도영 응원가.json"),
-    "아웃(삐끼삐끼)": os.path.join(BASE_DIR, "아웃(삐끼삐끼).json"),
-    "외쳐라 최강기아": os.path.join(BASE_DIR, "외쳐라 최강기아.json"),
-    "홈런": os.path.join(BASE_DIR, "홈런.json"),
+    "hello": os.path.join(BASE_DIR, "hello.json"),
+    "hifive": os.path.join(BASE_DIR, "hifive.json"),
+    "fighting": os.path.join(BASE_DIR, "fighting.json"),
+    "차렷자세": os.path.join(BASE_DIR, "hold.json"),
+    "김지찬 응원가": os.path.join(BASE_DIR, "kimjichan.json"),
+    "김도영 응원가": os.path.join(BASE_DIR, "kimdoyoung.json"),
+    "아웃(삐끼삐끼)": os.path.join(BASE_DIR, "out.json"),
+    "외쳐라 최강기아": os.path.join(BASE_DIR, "kia.json"),
+    "홈런": os.path.join(BASE_DIR, "homerun.json"),
 }
 
 _macro_cache: Dict[str, Dict[str, Any]] = {}
@@ -606,21 +606,21 @@ class VoiceAssistant:
                 custom_triggers = [
                     {
                         "keywords": ["안녕", "hello", "헬로"],
-                        "file": "안녕",
+                        "file": "hello",
                         "macro": "안녕",
                         "display": "안녕이라고 말씀하셨어요",
                         "reply": "안녕하세요! 무엇을 도와드릴까요?",
                     },
                     {
                         "keywords": ["하이파이브", "하이파이브해", "하이파이브해줘", "hi5", "highfive"],
-                        "file": "하이파이브",
+                        "file": "hifive",
                         "macro": "하이파이브",
                         "display": "하이파이브 요청 감지",
                         "reply": "하이파이브! 멋진 에너지네요!",
                     },
                     {
                         "keywords": ["파이팅", "화이팅", "파이팅해", "파이팅해줘", "파잇팅"],
-                        "file": "파이팅",
+                        "file": "fighting",
                         "macro": "파이팅",
                         "display": "파이팅 요청 감지",
                         "reply": "파이팅! 힘껏 응원할게요!",
