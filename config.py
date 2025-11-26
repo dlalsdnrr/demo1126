@@ -15,6 +15,8 @@ WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "")
 SERIAL_PORT = os.getenv("SERIAL_PORT", "COM5")
 SERIAL_BAUD = int(os.getenv("SERIAL_BAUD", "115200"))
 BASEBALL_ID = os.getenv("BASEBALL_ID", "")
+GAME_MODE = (os.getenv("GAME_MODE") or "auto").lower()
+SCRIPT_ID = (os.getenv("SCRIPT_ID") or "kia_samsung_demo").strip()
 MOTOR_ID_MAP: Dict[str, int] = {
     "R1": int(os.getenv("MOTOR_ID_R1", "25")),
     "R2": int(os.getenv("MOTOR_ID_R2", "50")),
