@@ -21,9 +21,19 @@ def _ensure_open():
     if pyserial is None:
         raise RuntimeError("pyserial_not_installed")
     if ser is None or not getattr(ser, "is_open", False):
-        ser = pyserial.Serial(PORT, BAUDRATE, timeout=1)
-        # 아두이노 리셋 대기
-        time.sleep(2)
+        try:
+            ser = pyserial.Serial(PORT, BAUDRATE, timeout=1)
+            # 아두이노 리셋 대기
+            time.sleep(2)
+            print(f"✓ 시리얼 포트 연결 성공: {PORT} ({BAUDRATE} baud)")
+        except pyserial.SerialException as e:
+            error_msg = f"시리얼 포트 연결 실패: {PORT} - {str(e)}"
+            print(f"✗ {error_msg}")
+            raise RuntimeError(error_msg) from e
+        except Exception as e:
+            error_msg = f"시리얼 포트 열기 중 오류: {str(e)}"
+            print(f"✗ {error_msg}")
+            raise RuntimeError(error_msg) from e
 
 
 def _send_command(motor_id: int, position: int, speed: int) -> str:

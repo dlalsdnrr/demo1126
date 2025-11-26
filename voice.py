@@ -16,8 +16,7 @@ from flask import Blueprint, jsonify, request
 import google.generativeai as genai
 
 from config import GEMINI_API_KEY, WEATHER_API_KEY
-from macros_executor import resolve_motor_id
-from serial_api import _send_command
+from macros_executor import trigger_macro
 
 # ============================================================================
 # API 및 모듈 초기화
@@ -127,105 +126,7 @@ def get_yongin_weather() -> Optional[Dict[str, Any]]:
 # 핵심 기능 (STT, TTS, 오디오 변환)
 # ============================================================================
 
-# --- hello.json 매크로 지원 --------------------------------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MACRO_FILES = {
-    "hello": os.path.join(BASE_DIR, "hello.json"),
-    "hifive": os.path.join(BASE_DIR, "hifive.json"),
-    "fighting": os.path.join(BASE_DIR, "fighting.json"),
-    "차렷자세": os.path.join(BASE_DIR, "hold.json"),
-    "김지찬 응원가": os.path.join(BASE_DIR, "kimjichan.json"),
-    "김도영 응원가": os.path.join(BASE_DIR, "kimdoyoung.json"),
-    "아웃(삐끼삐끼)": os.path.join(BASE_DIR, "out.json"),
-    "외쳐라 최강기아": os.path.join(BASE_DIR, "kia.json"),
-    "홈런": os.path.join(BASE_DIR, "homerun.json"),
-}
-
-_macro_cache: Dict[str, Dict[str, Any]] = {}
-_macro_mtime: Dict[str, Optional[float]] = {key: None for key in MACRO_FILES}
-_macro_lock = threading.Lock()
-
-
-def load_macro_file(key: str) -> Dict[str, Any]:
-    path = MACRO_FILES.get(key)
-    if not path:
-        return {}
-    with _macro_lock:
-        try:
-            mtime = os.path.getmtime(path)
-        except FileNotFoundError:
-            if key not in _macro_cache:
-                print(f"⚠️ {path} 파일을 찾을 수 없습니다.")
-            _macro_cache[key] = {}
-            _macro_mtime[key] = None
-            return _macro_cache[key]
-        except Exception as e:
-            print(f"✗ {path} 상태 확인 실패: {e}")
-            _macro_cache[key] = {}
-            _macro_mtime[key] = None
-            return _macro_cache[key]
-
-        if key in _macro_cache and _macro_mtime.get(key) == mtime:
-            return _macro_cache[key]
-
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f) or {}
-                macros = data.get("macros", {})
-                if not isinstance(macros, dict):
-                    macros = {}
-                _macro_cache[key] = macros
-                _macro_mtime[key] = mtime
-                print(f"✓ {os.path.basename(path)} 로드 완료: {len(macros)}개 매크로")
-                return macros
-        except Exception as e:
-            print(f"✗ {path} 로드 실패: {e}")
-            _macro_cache[key] = {}
-            _macro_mtime[key] = None
-            return _macro_cache[key]
-
-
-def _run_macro_steps(steps: Any) -> bool:
-    if not isinstance(steps, list) or not steps:
-        return False
-    if _send_command is None:
-        print("✗ 시리얼 제어 모듈(_send_command) 미준비")
-        return False
-    for step in steps:
-        try:
-            motor_id = resolve_motor_id(step.get("motor_id"))
-            position = int(step.get("position"))
-            speed_raw = step.get("speed", 0)
-            speed = int(speed_raw) if str(speed_raw).lstrip("-").isdigit() else 0
-            delay_raw = step.get("delay_ms", 200)
-            delay_ms = int(delay_raw) if str(delay_raw).lstrip("-").isdigit() else 200
-        except Exception as e:
-            print(f"✗ 매크로 파싱 실패: {e}")
-            continue
-        try:
-            _send_command(motor_id, position, speed)
-        except Exception as e:
-            print(f"✗ 매크로 전송 실패: {e}")
-            return False
-        finally:
-            time.sleep(max(0, delay_ms) / 1000.0)
-    return True
-
-
-def trigger_macro(file_key: str, macro_name: str) -> bool:
-    macros = load_macro_file(file_key)
-    steps = macros.get(macro_name)
-    if not steps:
-        print(f"⚠️ {file_key}에 '{macro_name}' 매크로가 없습니다.")
-        return False
-
-    def _runner():
-        success = _run_macro_steps(steps)
-        status = "성공" if success else "실패"
-        print(f"→ {file_key} 매크로('{macro_name}') 실행 {status}")
-
-    threading.Thread(target=_runner, daemon=True).start()
-    return True
+# 매크로 실행은 macros_executor 모듈을 사용
 
 
 def convert_audio_to_wav(input_bytes: bytes) -> Optional[bytes]:

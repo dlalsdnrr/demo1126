@@ -127,6 +127,33 @@ body {
   line-height: 1;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
   text-shadow: 0 0 6px rgba(0, 210, 255, 0.6);
+  z-index: 5;
+}
+
+/* 베이스 주자 이름 표시 */
+.base-runner-name {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  margin-top: 32px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(200, 0, 0, 0.9);
+  padding: 3px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  border: 1px solid rgba(255, 138, 138, 0.6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 12px rgba(255, 138, 138, 0.4);
+  z-index: 6;
+  text-shadow: 0 0 4px rgba(255, 200, 200, 0.8);
+  display: none;
+}
+
+.base.occupied .base-runner-name {
+  display: block;
 }
 @keyframes baseGlow {
   from { box-shadow: 0 0 0 rgba(0,0,0,0.0), 0 0 0 rgba(0,0,0,0.0); filter: drop-shadow(0 0 0px rgba(0, 210, 255, 0)); }
@@ -188,19 +215,47 @@ body {
 /* 수비수 */
 .fielder {
   position: absolute;
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   background: radial-gradient(circle at 40% 40%, #ffffff 0%, #d4eaff 100%);
-  border: 1px solid #a0c3e0;
+  border: 2px solid #8ab4ff;
   border-radius: 50%;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 12px rgba(138, 180, 255, 0.4);
   transform: translate(-50%, -50%);
   opacity: 0;
   transition: opacity 0.3s ease;
+  z-index: 10;
 }
 
 .fielder.occupied {
   opacity: 1;
+}
+
+/* 타자 (홈플레이트) */
+.batter {
+  position: absolute;
+  left: 50%;
+  top: 95%;
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle at 40% 40%, #ffffff 0%, #ffd4d4 100%);
+  border: 2px solid #ff8a8a;
+  border-radius: 50%;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6), 0 0 16px rgba(255, 138, 138, 0.5);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 11;
+}
+
+.batter.active {
+  opacity: 1;
+  animation: batterPulse 2s ease-in-out infinite;
+}
+
+@keyframes batterPulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.15); }
 }
 
 /* 수비수 위치 지정 - 아래로 조정 */
@@ -217,21 +272,45 @@ body {
 /* 수비수 이름 */
 .fielder-name {
   position: absolute;
-  top: 18px;
+  top: 22px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 10px;
+  font-weight: 600;
   color: #ffffff;
-  background: rgba(0, 0, 0, 0.7);
-  padding: 2px 4px;
-  border-radius: 3px;
+  background: rgba(0, 100, 200, 0.9);
+  padding: 3px 6px;
+  border-radius: 4px;
   white-space: nowrap;
   pointer-events: none;
+  border: 1px solid rgba(138, 180, 255, 0.5);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  z-index: 12;
 }
 
 /* 포수 이름은 위에 표시 */
 .fielder-c .fielder-name {
-  top: -20px;
+  top: -24px;
+}
+
+/* 타자 이름 */
+.batter-name {
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(200, 0, 0, 0.9);
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  border: 1px solid rgba(255, 138, 138, 0.6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 12px rgba(255, 138, 138, 0.4);
+  z-index: 13;
+  text-shadow: 0 0 4px rgba(255, 200, 200, 0.8);
 }
 
 /* 중앙 팝업 */
@@ -271,6 +350,65 @@ body {
 
 .popup-overlay.show .popup-content {
   transform: scale(1);
+}
+
+/* 우승 팝업 스타일 */
+.popup-overlay.victory {
+  left: 50%;
+  z-index: 2000;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.popup-overlay.victory .popup-content {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.95), rgba(255, 140, 0, 0.95));
+  color: #000000;
+  padding: 30px 50px;
+  border-radius: 20px;
+  font-size: 32px;
+  font-weight: 900;
+  border: 4px solid #ffd700;
+  box-shadow: 0 8px 40px rgba(255, 215, 0, 0.8), 0 0 60px rgba(255, 215, 0, 0.6);
+  animation: victoryPulse 1.5s ease-in-out infinite;
+  text-shadow: 2px 2px 4px rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  word-wrap: normal;
+  overflow: visible;
+}
+
+.popup-overlay.victory.show .popup-content {
+  transform: scale(1.1);
+  animation: victoryPulse 1.5s ease-in-out infinite, victoryRotate 3s linear infinite;
+}
+
+@keyframes victoryPulse {
+  0%, 100% { 
+    transform: scale(1.1);
+    box-shadow: 0 8px 40px rgba(255, 215, 0, 0.8), 0 0 60px rgba(255, 215, 0, 0.6);
+  }
+  50% { 
+    transform: scale(1.2);
+    box-shadow: 0 12px 60px rgba(255, 215, 0, 1), 0 0 100px rgba(255, 215, 0, 0.8);
+  }
+}
+
+@keyframes victoryRotate {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+/* 우승 시 전체 화면 효과 */
+.stage.victory-mode {
+  animation: victoryGlow 2s ease-in-out infinite;
+}
+
+@keyframes victoryGlow {
+  0%, 100% { 
+    box-shadow: 0 0 0 rgba(255, 215, 0, 0);
+  }
+  50% { 
+    box-shadow: 0 0 100px rgba(255, 215, 0, 0.6), inset 0 0 100px rgba(255, 215, 0, 0.3);
+  }
 }
 
 /* 반응형 */

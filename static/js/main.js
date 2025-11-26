@@ -2,6 +2,8 @@
   const POLL_MS = 2000;
   let currentGameId = null; // 서버 설정(.env)에서 로드됩니다.
   let lastPlayText = ''; // 이전 플레이 텍스트 저장용
+  let lastPopupText = ''; // 이전 팝업 텍스트 저장용
+  let victoryPopupDismissed = false; // 우승 팝업이 닫혔는지 여부
   let demoRunning = false;
   let forceDemoMode = false;
 
@@ -17,11 +19,16 @@
       inningNumber: document.getElementById('inning-number'),
       halfIndicator: document.getElementById('half-indicator'),
       lastPlayText: document.getElementById('last-play-text'),
-      bases: [
-          document.getElementById('base-1'),
-          document.getElementById('base-2'),
-          document.getElementById('base-3')
-      ],
+      bases: [
+          document.getElementById('base-1'),
+          document.getElementById('base-2'),
+          document.getElementById('base-3')
+      ],
+      runnerNames: [
+          document.getElementById('runner-name-1'),
+          document.getElementById('runner-name-2'),
+          document.getElementById('runner-name-3')
+      ],
       balls: [
           document.getElementById('ball-1'),
           document.getElementById('ball-2'),
@@ -48,18 +55,20 @@
           cf: document.getElementById('fielder-cf'),
           rf: document.getElementById('fielder-rf')
       },
-      fielderNames: {
-          p: document.getElementById('fielder-name-p'),
-          c: document.getElementById('fielder-name-c'),
-          '1b': document.getElementById('fielder-name-1b'),
-          '2b': document.getElementById('fielder-name-2b'),
-          '3b': document.getElementById('fielder-name-3b'),
-          ss: document.getElementById('fielder-name-ss'),
-          lf: document.getElementById('fielder-name-lf'),
-          cf: document.getElementById('fielder-name-cf'),
-          rf: document.getElementById('fielder-name-rf')
-      }
-  };
+      fielderNames: {
+          p: document.getElementById('fielder-name-p'),
+          c: document.getElementById('fielder-name-c'),
+          '1b': document.getElementById('fielder-name-1b'),
+          '2b': document.getElementById('fielder-name-2b'),
+          '3b': document.getElementById('fielder-name-3b'),
+          ss: document.getElementById('fielder-name-ss'),
+          lf: document.getElementById('fielder-name-lf'),
+          cf: document.getElementById('fielder-name-cf'),
+          rf: document.getElementById('fielder-name-rf')
+      },
+      batter: document.getElementById('batter'),
+      batterName: document.getElementById('batter-name')
+  };
 
   async function fetchState() {
       const useLocal = demoRunning || forceDemoMode || !currentGameId;
@@ -82,45 +91,137 @@
       });
   }
 
-  function updateBases(bases) {
-      const occupied = [bases.first, bases.second, bases.third];
-      el.bases.forEach((b, i) => b && b.classList.toggle('occupied', Boolean(occupied[i])));
-  }
+  function updateBases(bases, state) {
+      const occupied = [bases.first, bases.second, bases.third];
+      const runners = state?.runners || {first: "", second: "", third: ""};
+      const runnerNames = [runners.first, runners.second, runners.third];
+      const half = state?.half || 'T';
+      const teamSide = half === 'T' ? 'away' : 'home';
+      
+      el.bases.forEach((b, i) => {
+          if (!b) return;
+          const isOccupied = Boolean(occupied[i]);
+          b.classList.toggle('occupied', isOccupied);
+          
+          // 주자 이름 표시
+          const runnerNameEl = el.runnerNames[i];
+          if (runnerNameEl) {
+              if (isOccupied && runnerNames[i]) {
+                  runnerNameEl.textContent = runnerNames[i];
+              } else if (isOccupied) {
+                  // last_event에서 선수 이름 추출 시도
+                  const eventDesc = state?.last_event?.description || '';
+                  const nameMatch = eventDesc.match(/^([가-힣]{2,4})[,\s]/);
+                  if (nameMatch) {
+                      runnerNameEl.textContent = nameMatch[1];
+                  } else {
+                      runnerNameEl.textContent = '주자';
+                  }
+              } else {
+                  runnerNameEl.textContent = '';
+              }
+          }
+      });
+  }
 
-  function updateFielders(fielders) {
-      if (!fielders) return;
-      for (const pos in fielders) {
-          const fielderData = fielders[pos];
-          if (el.fielders[pos]) {
-              el.fielders[pos].classList.toggle('occupied', fielderData.active);
-              if (el.fielderNames[pos]) {
-                  el.fielderNames[pos].textContent = fielderData.name || '';
-              }
-          }
-      }
-  }
+  function updateFielders(fielders) {
+      if (!fielders) return;
+      for (const pos in fielders) {
+          const fielderData = fielders[pos];
+          if (el.fielders[pos]) {
+              el.fielders[pos].classList.toggle('occupied', fielderData.active);
+              if (el.fielderNames[pos]) {
+                  el.fielderNames[pos].textContent = fielderData.name || '';
+              }
+          }
+      }
+  }
 
-  const NON_GAME_POPUP_TYPES = new Set(['info', 'start']);
+  function updateBatter(batter) {
+      if (!batter) return;
+      if (el.batter) {
+          el.batter.classList.toggle('active', batter.active || false);
+          if (el.batterName) {
+              el.batterName.textContent = batter.name || '';
+          }
+      }
+  }
+
+  const NON_GAME_POPUP_TYPES = new Set(['info', 'chant']);
+  
+  // 경기 플레이 이벤트만 팝업 표시 (경기 내용 관련)
+  const GAME_PLAY_EVENTS = new Set(['start', 'strikeout', 'hr', 'single', 'double', 'triple', 'out', 'sac_fly', 'walk', 'error', 'live', 'change']);
 
   function isGameEvent(event) {
       if (!event || !event.type) return false;
       return !NON_GAME_POPUP_TYPES.has(event.type);
   }
+  
+  function isGamePlayEvent(event) {
+      if (!event || !event.type) return false;
+      return GAME_PLAY_EVENTS.has(event.type);
+  }
 
-  function showPopup(text) {
-      const overlay = document.getElementById('popup-overlay');
-      const content = document.getElementById('popup-content');
+  function showPopup(text, isVictory = false) {
+      const overlay = document.getElementById('popup-overlay');
+      const content = document.getElementById('popup-content');
+      const stage = document.querySelector('.stage');
 
-      if (!overlay || !content || !text || text === '경기 시작') return;
+      if (!overlay || !content || !text || text.trim() === '') return;
 
-      content.textContent = text;
-      overlay.classList.add('show');
-
-      // 3초 후 자동으로 숨김
-      setTimeout(() => {
-          overlay.classList.remove('show');
-      }, 3000);
-  }
+      content.textContent = text;
+      
+      // 우승 모드 설정
+      if (isVictory) {
+          overlay.classList.add('victory');
+          if (stage) {
+              stage.classList.add('victory-mode');
+          }
+          
+          // 기존 이벤트 리스너 제거 (중복 방지)
+          overlay.onclick = null;
+          overlay.ontouchstart = null;
+          
+          // 우승 팝업은 클릭/터치로만 닫기 가능 (자동으로 사라지지 않음)
+          // 명시적으로 setTimeout을 사용하지 않아 계속 표시됨
+          const closeVictoryPopup = function(e) {
+              if (e) {
+                  e.stopPropagation();
+                  e.preventDefault();
+              }
+              overlay.classList.remove('show');
+              overlay.classList.remove('victory');
+              if (stage) {
+                  stage.classList.remove('victory-mode');
+              }
+              overlay.onclick = null;
+              overlay.ontouchstart = null;
+              // 우승 팝업이 닫혔음을 표시하여 다시 표시되지 않도록 함
+              victoryPopupDismissed = true;
+              lastPopupText = ''; // 팝업 텍스트도 리셋
+          };
+          
+          overlay.onclick = closeVictoryPopup;
+          overlay.ontouchstart = closeVictoryPopup;
+          
+          // 자동으로 사라지지 않도록 명시적으로 설정
+          // setTimeout을 사용하지 않음
+      } else {
+          overlay.classList.remove('victory');
+          if (stage) {
+              stage.classList.remove('victory-mode');
+          }
+          overlay.onclick = null;
+          overlay.ontouchstart = null;
+          
+          // 일반 팝업은 3초 후 자동으로 숨김
+          setTimeout(() => {
+              overlay.classList.remove('show');
+          }, 3000);
+      }
+      
+      overlay.classList.add('show');
+  }
 
   function updateHalf(half) {
       el.halfIndicator.textContent = half === 'T' ? '▲' : '▼';
@@ -141,9 +242,9 @@
       }, { once: true });
   }
 
-  function render(state) {
-      if (!state) return;
-      const { teams, inning, half, count, bases, fielders, last_event } = state;
+  function render(state) {
+      if (!state) return;
+      const { teams, inning, half, count, bases, fielders, batter, last_event } = state;
       el.nameAway.textContent = teams.away.name;
       el.nameHome.textContent = teams.home.name;
       el.runsAway.textContent = teams.away.runs;
@@ -154,19 +255,77 @@
       el.errorsHome.textContent = teams.home.errors;
       el.inningNumber.textContent = inning;
       updateHalf(half);
-      setDots(el.balls, count.balls);
-      setDots(el.strikes, count.strikes);
-      setDots(el.outs, count.outs);
-      updateBases(bases);
-      updateFielders(fielders);
+      setDots(el.balls, count.balls);
+      setDots(el.strikes, count.strikes);
+      setDots(el.outs, count.outs);
+      updateBases(bases, state);
+      updateFielders(fielders);
+      updateBatter(batter);
 
-      // 플레이 텍스트 업데이트 및 팝업 표시
+      // 플레이 텍스트 업데이트 및 팝업 표시
       const currentPlayText = last_event?.description ?? '';
-      if (currentPlayText && currentPlayText !== lastPlayText && lastPlayText !== '' && isGameEvent(last_event)) {
-          showPopup(currentPlayText);
-      }
-      lastPlayText = currentPlayText;
-      el.lastPlayText.textContent = currentPlayText;
+      const popupText = last_event?.popup_description;  // None이거나 문자열
+      const hasPopupText = popupText && popupText.trim() !== '';
+      const isVictory = last_event?.type === 'end' || (hasPopupText && popupText.includes('우승'));
+      const overlay = document.getElementById('popup-overlay');
+      const isVictoryPopupShowing = overlay && overlay.classList.contains('show') && overlay.classList.contains('victory');
+      
+      // 경기 플레이 이벤트인지 확인
+      const isGamePlay = isGamePlayEvent(last_event);
+      
+      // 팝업에 표시할 텍스트: popup_description이 있으면 그것을, 없으면 description 사용
+      const displayText = hasPopupText ? popupText : currentPlayText;
+      
+      // 왼쪽 아래 경기 진행 텍스트: 경기 플레이 이벤트만 표시
+      // 응원가(chant), 휴식(info) 등은 완전히 무시 (이전 텍스트 유지)
+      if (isGamePlay) {
+          el.lastPlayText.textContent = displayText || '';
+      } else if (isVictory && hasPopupText && popupText.includes('우승')) {
+          // 우승 팝업 텍스트만 표시
+          el.lastPlayText.textContent = popupText;
+      }
+      // 응원가, 휴식 등은 진행중 텍스트를 업데이트하지 않음 (이전 텍스트 유지)
+      
+      // 우승 팝업은 항상 표시하고, 다른 팝업으로 덮어씌우지 않음
+      // 단, 이미 닫힌 경우 다시 표시하지 않음
+      if (isVictory && hasPopupText && !victoryPopupDismissed) {
+          // 이미 우승 팝업이 표시 중이면 새로 표시하지 않음
+          if (!isVictoryPopupShowing || popupText !== lastPopupText) {
+              showPopup(popupText, true);
+              lastPopupText = popupText;
+          }
+      } 
+      // 경기 플레이 이벤트면 무조건 팝업 표시 (경기 진행 텍스트와 동일한 텍스트)
+      // 단, 우승 팝업이 표시 중이면 일반 팝업은 표시하지 않음
+      // 응원가(chant), 휴식(info) 등은 팝업 표시 안 함
+      else if (isGamePlay && !isVictoryPopupShowing) {
+          // 경기 진행 텍스트가 변경되었으면 팝업도 표시 (싱크 맞추기)
+          // 공수 교대(change)도 팝업으로 표시
+          // currentPlayText와 lastPlayText를 비교하여 변경되었으면 팝업 표시
+          if (displayText && displayText.trim() !== '') {
+              // 이전 경기 이벤트와 다른 텍스트면 팝업 표시
+              // lastPlayText가 빈 문자열이면 첫 이벤트이므로 팝업 표시
+              // displayText와 lastPopupText를 비교하여 중복 방지
+              const textChanged = displayText !== lastPopupText;
+              if (textChanged || lastPlayText === '' || lastPopupText === '') {
+                  showPopup(displayText, false);
+                  lastPopupText = displayText;
+              }
+          }
+      }
+      // 응원가, 휴식 등은 팝업 표시 안 함 (아무것도 하지 않음)
+      
+      // 경기 플레이 이벤트일 때만 lastPlayText 업데이트 (응원가 등은 업데이트 안 함)
+      // 이렇게 하면 응원가 step이 lastPlayText를 변경하지 않아서 다음 경기 이벤트 팝업이 정상 표시됨
+      if (isGamePlay) {
+          lastPlayText = currentPlayText;
+      }
+      
+      // 경기 이벤트가 아니면 lastPopupText는 리셋하지 않음 (다음 경기 이벤트 팝업을 위해 유지)
+      // 경기 이벤트가 아니고 popup_description도 없으면 lastPopupText 리셋 (단, 우승 팝업은 유지)
+      if (!isGamePlay && !hasPopupText && !isVictory) {
+          lastPopupText = '';
+      }
 
       animatePitchIfNeeded(last_event);
       maybeSendAction(last_event);

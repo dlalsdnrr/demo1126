@@ -59,11 +59,22 @@
         <section class="field" aria-label="야구장">
           <div class="field-inner" style="--mound-x: 50%; --mound-y: 52%; --home-x: 50%; --home-y: 70%;">
             <div class="diamond"></div>
-            <div class="base base-1" id="base-1"></div>
-            <div class="base base-2" id="base-2"></div>
-            <div class="base base-3" id="base-3"></div>
+            <div class="base base-1" id="base-1">
+              <div class="base-runner-name" id="runner-name-1"></div>
+            </div>
+            <div class="base base-2" id="base-2">
+              <div class="base-runner-name" id="runner-name-2"></div>
+            </div>
+            <div class="base base-3" id="base-3">
+              <div class="base-runner-name" id="runner-name-3"></div>
+            </div>
             <div class="home-plate"></div>
             <div class="mound"></div>
+
+            <!-- 타자 위치 (홈플레이트) -->
+            <div class="batter" id="batter">
+              <div class="batter-name" id="batter-name"></div>
+            </div>
 
             <!-- 수비수 위치 -->
             <div class="fielder fielder-p" id="fielder-p">

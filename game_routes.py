@@ -11,7 +11,7 @@ from macros_executor import (
     last_event_to_trigger_text,
     run_macro_by_name_async,
 )
-from voice import trigger_macro  # reuse macro loader
+from macros_executor import trigger_macro
 from config import BASEBALL_ID
 
 
@@ -30,6 +30,8 @@ def _initial_game_state() -> Dict[str, Any]:
         "half": "T",
         "count": {"balls": 0, "strikes": 0, "outs": 0},
         "bases": {"first": False, "second": False, "third": False},
+        "runners": {"first": "", "second": "", "third": ""},
+        "batter": {"name": "", "active": False},
         "fielders": {
             "p": {"active": True, "name": ""},
             "c": {"active": True, "name": ""},
@@ -52,9 +54,9 @@ DEMO_MACRO_MAP = {
     "차렷자세": ("차렷자세", "차렷자세"),  # hold.json
     "김지찬 응원가": ("김지찬 응원가", "김지찬 응원가"),  # kimjichan.json
     "아웃(삐끼삐끼)": ("아웃(삐끼삐끼)", "아웃(삐끼삐끼)"),  # out.json
-    "최강기아 1125": ("김도영 응원가", "김도영 응원가"),  # kimdoyoung.json
+    "김도영 응원가가": ("김도영 응원가", "김도영 응원가"),  # kimdoyoung.json
     "홈런": ("홈런", "홈런"),  # homerun.json
-    "최강기아 + 만세 1125": ("외쳐라 최강기아", "최강기아"),  # kia.json
+    "최강기아": ("외쳐라 최강기아", "최강기아"),  # kia.json
 }
 
 
@@ -72,23 +74,35 @@ DEMO_SCENARIO_STEPS = [
         "half": "T",
         "count": {"balls": 0, "strikes": 0, "outs": 0},
         "bases": {"first": False, "second": False, "third": False},
+        "fielders": {
+            "p": {"active": True, "name": "양현종"},
+            "c": {"active": True, "name": "김태군"},
+            "1b": {"active": True, "name": "김석환"},
+            "2b": {"active": True, "name": "김선빈"},
+            "3b": {"active": True, "name": "김도영"},
+            "ss": {"active": True, "name": "박찬호"},
+            "lf": {"active": True, "name": "김호령"},
+            "cf": {"active": True, "name": "최형우"},
+            "rf": {"active": True, "name": "소크라테스"},
+        },
     },
     {
         "delay": 3,
-        "description": "경기 시작",
+        "description": "경기 시작 삼성 공격 기아 수비",
         "event_type": "start",
     },
     {
         "delay": 3,
-        "description": "상대팀 김지찬 타석 입장",
+        "description": "김지찬 타석 입장",
         "event_type": "live",
+        "batter": {"name": "김지찬", "active": True},
     },
     {
         "delay": 0,
         "description": "김지찬 응원가",
         "event_type": "chant",
         "macro": "김지찬 응원가",
-        "popup_description": "김지찬 타석 입장",
+        "batter": {"name": "김지찬", "active": True},
     },
     {
         "delay": 10,
@@ -96,10 +110,12 @@ DEMO_SCENARIO_STEPS = [
         "event_type": "info",
     },
     {
-        "delay": 2,
-        "description": "김지찬 삼진 아웃",
+        "delay": 3,
+        "description": "김지찬, 삼진 아웃",
         "event_type": "strikeout",
         "count": {"balls": 0, "strikes": 0, "outs": 1},
+        "batter": {"name": "", "active": False},
+        "runners": {"first": "", "second": "", "third": ""},
     },
     {
         "delay": 0,
@@ -108,17 +124,69 @@ DEMO_SCENARIO_STEPS = [
         "macro": "아웃(삐끼삐끼)",
     },
     {
-        "delay": 10,
-        "description": "아웃 연출 유지",
-        "event_type": "info",
+        "delay": 8,
+        "description": "구자욱 타석 입장",
+        "event_type": "live",
+        "batter": {"name": "구자욱", "active": True},
+    },
+    {
+        "delay": 2,
+        "description": "구자욱, 우중간 안타로 1루에 출루",
+        "event_type": "single",
+        "count": {"balls": 0, "strikes": 0, "outs": 1},
+        "bases": {"first": True, "second": False, "third": False},
+        "batter": {"name": "", "active": False},
+        "runners": {"first": "구자욱", "second": "", "third": ""},
+        "hits_delta": {"away": 1},
     },
     {
         "delay": 3,
-        "description": "공수 교대 → KIA 공격",
+        "description": "오재일 타석 입장",
+        "event_type": "live",
+        "batter": {"name": "오재일", "active": True},
+    },
+    {
+        "delay": 2,
+        "description": "오재일, 플라이 아웃",
+        "event_type": "out",
+        "count": {"balls": 0, "strikes": 0, "outs": 2},
+        "bases": {"first": True, "second": False, "third": False},
+        "batter": {"name": "", "active": False},
+        "runners": {"first": "구자욱", "second": "", "third": ""},
+    },
+    {
+        "delay": 2,
+        "description": "이원석 타석 입장",
+        "event_type": "live",
+        "batter": {"name": "이원석", "active": True},
+    },
+    {
+        "delay": 2,
+        "description": "이원석, 삼진 아웃",
+        "event_type": "strikeout",
+        "count": {"balls": 0, "strikes": 0, "outs": 3},
+        "bases": {"first": False, "second": False, "third": False},
+        "batter": {"name": "", "active": False},
+        "runners": {"first": "", "second": "", "third": ""},
+    },
+    {
+        "delay": 3,
+        "description": "공수 교대 기아 공격 삼성 수비",
         "event_type": "change",
         "half": "B",
         "count": {"balls": 0, "strikes": 0, "outs": 0},
         "bases": {"first": False, "second": False, "third": False},
+        "fielders": {
+            "p": {"active": True, "name": "원태인"},
+            "c": {"active": True, "name": "강민호"},
+            "1b": {"active": True, "name": "오재일"},
+            "2b": {"active": True, "name": "김지찬"},
+            "3b": {"active": True, "name": "이원석"},
+            "ss": {"active": True, "name": "이재현"},
+            "lf": {"active": True, "name": "김헌곤"},
+            "cf": {"active": True, "name": "구자욱"},
+            "rf": {"active": True, "name": "박해민"},
+        },
     },
     {
         "delay": 0,
@@ -130,13 +198,14 @@ DEMO_SCENARIO_STEPS = [
         "delay": 3,
         "description": "김도영 타석 입장",
         "event_type": "live",
+        "batter": {"name": "김도영", "active": True},
     },
     {
         "delay": 0,
         "description": "김도영 응원가",
         "event_type": "chant",
-        "macro": "최강기아 1125",
-        "popup_description": "김도영 타석 입장",
+        "macro": "김도영 응원가가",
+        "batter": {"name": "김도영", "active": True},
     },
     {
         "delay": 10,
@@ -144,13 +213,15 @@ DEMO_SCENARIO_STEPS = [
         "event_type": "info",
     },
     {
-        "delay": 2,
+        "delay": 3,
         "description": "김도영 좌중월 솔로 홈런!",
         "event_type": "hr",
         "score_delta": {"home": 1},
         "hits_delta": {"home": 1},
         "bases": {"first": False, "second": False, "third": False},
         "count": {"balls": 0, "strikes": 0, "outs": 0},
+        "batter": {"name": "", "active": False},
+        "runners": {"first": "", "second": "", "third": ""},
     },
     {
         "delay": 0,
@@ -165,15 +236,71 @@ DEMO_SCENARIO_STEPS = [
     },
     {
         "delay": 2,
-        "description": "정적",
-        "event_type": "info",
+        "description": "최형우 타석 입장",
+        "event_type": "live",
+        "batter": {"name": "최형우", "active": True},
+    },
+    {
+        "delay": 2,
+        "description": "최형우, 중전 안타로 1루에 출루",
+        "event_type": "single",
+        "count": {"balls": 0, "strikes": 0, "outs": 0},
+        "bases": {"first": True, "second": False, "third": False},
+        "batter": {"name": "", "active": False},
+        "runners": {"first": "최형우", "second": "", "third": ""},
+        "hits_delta": {"home": 1},
+    },
+    {
+        "delay": 2,
+        "description": "박찬호 타석 입장",
+        "event_type": "live",
+        "batter": {"name": "박찬호", "active": True},
+    },
+    {
+        "delay": 2,
+        "description": "박찬호, 번트로 아웃, 주자는 2루로 진루",
+        "event_type": "out",
+        "count": {"balls": 0, "strikes": 0, "outs": 1},
+        "bases": {"first": False, "second": True, "third": False},
+        "batter": {"name": "", "active": False},
+        "runners": {"first": "", "second": "최형우", "third": ""},
+    },
+    {
+        "delay": 2,
+        "description": "소크라테스 타석 입장",
+        "event_type": "live",
+        "batter": {"name": "소크라테스", "active": True},
+    },
+    {
+        "delay": 2,
+        "description": "소크라테스, 희생플라이로 주자 홈인!",
+        "event_type": "sac_fly",
+        "score_delta": {"home": 1},
+        "count": {"balls": 0, "strikes": 0, "outs": 2},
+        "bases": {"first": False, "second": False, "third": False},
+        "batter": {"name": "", "active": False},
+        "runners": {"first": "", "second": "", "third": ""},
+    },
+    {
+        "delay": 2,
+        "description": "김석환 타석 입장",
+        "event_type": "live",
+        "batter": {"name": "김석환", "active": True},
+    },
+    {
+        "delay": 2,
+        "description": "김석환, 삼진 아웃",
+        "event_type": "strikeout",
+        "count": {"balls": 0, "strikes": 0, "outs": 3},
+        "bases": {"first": False, "second": False, "third": False},
+        "batter": {"name": "", "active": False},
+        "runners": {"first": "", "second": "", "third": ""},
     },
     {
         "delay": 0,
         "description": "기아 우승! 열광하라",
-        "event_type": "live",
-        "macro": "최강기아 + 만세 1125",
-        "popup_description": "기아 우승 세리머니",
+        "event_type": "info",
+        "macro": "최강기아",
     },
     {
         "delay": 10,
@@ -184,8 +311,9 @@ DEMO_SCENARIO_STEPS = [
         "delay": 0,
         "description": "경기 종료 – KIA 승리",
         "event_type": "end",
-        "set_scores": {"home": 1, "away": 0},
+        "set_scores": {"home": 2, "away": 0},
         "half": "F",
+        "popup_description": "🏆 KIA 타이거즈 우승 🏆",
     },
     {
         "delay": 0,
@@ -303,21 +431,49 @@ class DemoScenarioRunner:
 
             if "bases" in step:
                 state["bases"].update(step["bases"])
+                # runners 정보도 함께 업데이트 (선택적)
+                if "runners" in step:
+                    if "runners" not in state:
+                        state["runners"] = {"first": "", "second": "", "third": ""}
+                    state["runners"].update(step["runners"])
 
-            state["last_event"] = {
-                "type": step.get("event_type", "live"),
-                "description": step.get("popup_description", step.get("description", "")),
-            }
+            if "batter" in step:
+                if "batter" not in state:
+                    state["batter"] = {"name": "", "active": False}
+                state["batter"].update(step["batter"])
+
+            if "fielders" in step:
+                state["fielders"].update(step["fielders"])
+
+            # 경기 관련 이벤트만 last_event 업데이트 (UI에 표시)
+            # 응원가(chant), 휴식(info), 삐끼삐끼(info), 기본 자세 복귀(info), 홈런 동작(info) 등은 내부 처리만 하고 UI에 표시 안 함
+            event_type = step.get("event_type", "live")
+            GAME_RELATED_EVENTS = {"start", "live", "strikeout", "hr", "single", "double", "triple", "out", "sac_fly", "walk", "error", "change", "end"}
+            
+            if event_type in GAME_RELATED_EVENTS:
+                # popup_description이 명시적으로 있으면 사용, 없으면 None
+                popup_desc = step.get("popup_description")
+                state["last_event"] = {
+                    "type": event_type,
+                    "description": step.get("description", ""),
+                    "popup_description": popup_desc if popup_desc is not None else None,
+                }
+            # 응원가, 휴식 등은 last_event를 업데이트하지 않음 (이전 경기 이벤트 유지)
 
         macro_name = step.get("macro")
         if macro_name:
             file_key, macro_key = DEMO_MACRO_MAP.get(macro_name, (None, None))
             if file_key and macro_key:
-                success = trigger_macro(file_key, macro_key)
-                if not success:
-                    print(f"⚠️ 데모 매크로 '{file_key}:{macro_key}' 실행 실패")
+                try:
+                    success = trigger_macro(file_key, macro_key)
+                    if not success:
+                        print(f"⚠️ 데모 매크로 '{file_key}:{macro_key}' 실행 실패")
+                        print(f"  → 매크로 파일 '{file_key}' 또는 매크로 이름 '{macro_key}' 확인 필요")
+                except Exception as e:
+                    print(f"✗ 데모 매크로 '{file_key}:{macro_key}' 실행 중 예외 발생: {type(e).__name__}: {e}")
             else:
-                print(f"⚠️ 데모 매크로 매핑 없음: {macro_name}")
+                print(f"⚠️ 데모 매크로 매핑 없음: '{macro_name}'")
+                print(f"  → DEMO_MACRO_MAP에 '{macro_name}' 키가 없습니다")
 
 
 demo_runner = DemoScenarioRunner()
@@ -460,6 +616,8 @@ def api_game_state():
         response["teams"] = {k: dict(v) for k, v in game_state["teams"].items()}
         response["count"] = dict(game_state["count"])
         response["bases"] = dict(game_state["bases"])
+        response["runners"] = dict(game_state.get("runners", {"first": "", "second": "", "third": ""}))
+        response["batter"] = dict(game_state.get("batter", {"name": "", "active": False}))
         response["fielders"] = {k: dict(v) for k, v in game_state.get("fielders", {}).items()}
         response["last_event"] = dict(game_state["last_event"]) if game_state.get("last_event") else None
     response["demo_active"] = demo_active

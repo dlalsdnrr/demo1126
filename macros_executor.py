@@ -12,6 +12,27 @@ from typing import Dict, Any, List, Optional
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MACROS_PATH = os.path.join(BASE_DIR, "macros.json")
 
+# 여러 매크로 파일 지원 (데모 시나리오용)
+MACRO_FILES = {
+    "hello": os.path.join(BASE_DIR, "hello.json"),
+    "hifive": os.path.join(BASE_DIR, "hifive.json"),
+    "fighting": os.path.join(BASE_DIR, "fighting.json"),
+    "차렷자세": os.path.join(BASE_DIR, "hold.json"),
+    "김지찬 응원가": os.path.join(BASE_DIR, "kimjichan.json"),
+    "김도영 응원가": os.path.join(BASE_DIR, "kimdoyoung.json"),
+    "아웃(삐끼삐끼)": os.path.join(BASE_DIR, "out.json"),
+    "외쳐라 최강기아": os.path.join(BASE_DIR, "kia.json"),
+    "홈런": os.path.join(BASE_DIR, "homerun.json"),
+}
+
+_macro_file_cache: Dict[str, Dict[str, Any]] = {}
+_macro_file_mtime: Dict[str, Optional[float]] = {key: None for key in MACRO_FILES}
+_macro_file_lock = threading.Lock()
+
+_macro_file_cache: Dict[str, Dict[str, Any]] = {}
+_macro_file_mtime: Dict[str, Optional[float]] = {key: None for key in MACRO_FILES}
+_macro_file_lock = threading.Lock()
+
 # 모터 ID 매핑 가져오기
 from config import MOTOR_ID_MAP
 
@@ -120,6 +141,134 @@ try:
     from serial_api import _send_command  # type: ignore
 except Exception:  # pragma: no cover
     _send_command = None  # type: ignore
+
+# 전역 포트 오류 표시 플래그 (한 번만 출력)
+_global_port_error_shown = False
+_port_error_lock = threading.Lock()
+
+
+def load_macro_file(file_key: str) -> Dict[str, Any]:
+    """특정 매크로 파일을 로드합니다 (캐싱 지원)"""
+    path = MACRO_FILES.get(file_key)
+    if not path:
+        return {}
+    
+    with _macro_file_lock:
+        try:
+            mtime = os.path.getmtime(path)
+        except FileNotFoundError:
+            if file_key not in _macro_file_cache:
+                print(f"⚠️ {path} 파일을 찾을 수 없습니다.")
+            _macro_file_cache[file_key] = {}
+            _macro_file_mtime[file_key] = None
+            return _macro_file_cache[file_key]
+        except Exception as e:
+            print(f"✗ {path} 상태 확인 실패: {e}")
+            _macro_file_cache[file_key] = {}
+            _macro_file_mtime[file_key] = None
+            return _macro_file_cache[file_key]
+
+        if file_key in _macro_file_cache and _macro_file_mtime.get(file_key) == mtime:
+            return _macro_file_cache[file_key]
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f) or {}
+                macros = data.get("macros", {})
+                if not isinstance(macros, dict):
+                    macros = {}
+                _macro_file_cache[file_key] = macros
+                _macro_file_mtime[file_key] = mtime
+                print(f"✓ {os.path.basename(path)} 로드 완료: {len(macros)}개 매크로")
+                return macros
+        except Exception as e:
+            print(f"✗ {path} 로드 실패: {e}")
+            _macro_file_cache[file_key] = {}
+            _macro_file_mtime[file_key] = None
+            return _macro_file_cache[file_key]
+
+
+def _run_macro_steps_with_error_handling(steps: List[Dict[str, Any]]) -> bool:
+    """매크로 스텝을 실행합니다 (에러 핸들링 포함)"""
+    global _global_port_error_shown
+    if not isinstance(steps, list) or not steps:
+        print("✗ 매크로 스텝이 비어있거나 유효하지 않습니다")
+        return False
+    if _send_command is None:
+        print("✗ 시리얼 제어 모듈(_send_command) 미준비")
+        return False
+    
+    # 포트 연결 상태 추적
+    port_was_disconnected = False
+    
+    for idx, step in enumerate(steps):
+        try:
+            motor_id = resolve_motor_id(step.get("motor_id"))
+            position = int(step.get("position"))
+            speed_raw = step.get("speed", 0)
+            speed = int(speed_raw) if str(speed_raw).lstrip("-").isdigit() else 0
+            delay_raw = step.get("delay_ms", 200)
+            delay_ms = int(delay_raw) if str(delay_raw).lstrip("-").isdigit() else 200
+        except Exception as e:
+            print(f"✗ 매크로 스텝 {idx+1}/{len(steps)} 파싱 실패: {e}")
+            print(f"  스텝 데이터: {step}")
+            continue
+        
+        # 명령 전송 시도 (매 스텝마다 포트 연결 재시도)
+        try:
+            _send_command(motor_id, position, speed)
+            # 포트가 이전에 끊겼다가 다시 연결된 경우
+            if port_was_disconnected:
+                print(f"✓ 시리얼 포트 연결 성공 - 정상 동작 재개")
+                port_was_disconnected = False
+        except RuntimeError as e:
+            # 시리얼 포트 연결 실패
+            error_msg = str(e)
+            if ("시리얼 포트" in error_msg or "serial" in error_msg.lower()):
+                with _port_error_lock:
+                    if not _global_port_error_shown:
+                        print(f"⚠️ 시리얼 포트 연결 실패: {error_msg}")
+                        print(f"  → 포트 연결 없이 시뮬레이션 모드로 진행합니다 (로봇은 움직이지 않습니다)")
+                        print(f"  → 포트를 연결하면 자동으로 정상 동작을 재개합니다")
+                        _global_port_error_shown = True
+                port_was_disconnected = True
+            else:
+                # 기타 예외는 한 번만 출력
+                with _port_error_lock:
+                    if not _global_port_error_shown:
+                        print(f"✗ 매크로 스텝 {idx+1}/{len(steps)} 전송 실패: {type(e).__name__}: {e}")
+                        _global_port_error_shown = True
+        
+        # delay는 항상 실행 (시뮬레이션 모드에서도 시간 흐름 유지)
+        time.sleep(max(0, delay_ms) / 1000.0)
+    
+    # 포트 연결 실패했어도 매크로는 "성공"으로 처리 (시뮬레이션 모드)
+    return True
+
+
+def trigger_macro(file_key: str, macro_name: str) -> bool:
+    """특정 매크로 파일에서 매크로를 실행합니다"""
+    macros = load_macro_file(file_key)
+    if not macros:
+        print(f"⚠️ 매크로 파일 '{file_key}'를 로드할 수 없거나 비어있습니다.")
+        print(f"  → MACRO_FILES에 '{file_key}' 키가 있는지 확인하세요.")
+        return False
+    
+    steps = macros.get(macro_name)
+    if not steps:
+        print(f"⚠️ {file_key}에 '{macro_name}' 매크로가 없습니다.")
+        print(f"  → 사용 가능한 매크로: {list(macros.keys())}")
+        return False
+
+    def _runner():
+        success = _run_macro_steps_with_error_handling(steps)
+        if success:
+            print(f"→ {file_key} 매크로('{macro_name}') 실행 완료")
+        else:
+            print(f"✗ {file_key} 매크로('{macro_name}') 실행 실패")
+
+    threading.Thread(target=_runner, daemon=True).start()
+    return True
 
 
 def _run_steps_blocking(steps: List[Dict[str, Any]]) -> None:
