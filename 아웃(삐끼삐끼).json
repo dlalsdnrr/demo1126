@@ -1,0 +1,246 @@
+{
+    "macros": {
+      "아웃(삐끼삐끼)": [
+        {
+          "delay_ms": 0,
+          "motor_id": "R1",
+          "position": 1024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 0,
+          "motor_id": "R2",
+          "position": 2024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 1000,
+          "motor_id": "RE",
+          "position": 1000,
+          "speed": 100
+        },
+        {
+          "delay_ms": 500,
+          "motor_id": "R2",
+          "position": 1024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 500,
+          "motor_id": "R2",
+          "position": 2024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 500,
+          "motor_id": "R2",
+          "position": 1024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 0,
+          "motor_id": "L1",
+          "position": 3036,
+          "speed": 100
+        },
+        {
+          "delay_ms": 0,
+          "motor_id": "L2",
+          "position": 2024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 500,
+          "motor_id": "LE",
+          "position": 1024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 500,
+          "motor_id": "L2",
+          "position": 1000,
+          "speed": 100
+        },
+        {
+          "delay_ms": 500,
+          "motor_id": "L2",
+          "position": 2024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 500,
+          "motor_id": "L2",
+          "position": 1000,
+          "speed": 100
+        },
+        {
+          "delay_ms": 500,
+          "motor_id": "R2",
+          "position": 2024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 500,
+          "motor_id": "R2",
+          "position": 1024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 500,
+          "motor_id": "R2",
+          "position": 2024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 500,
+          "motor_id": "R2",
+          "position": 1024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 0,
+          "motor_id": "R2",
+          "position": 1500,
+          "speed": 200
+        },
+        {
+          "delay_ms": 0,
+          "motor_id": "L2",
+          "position": 1500,
+          "speed": 200
+        },
+        {
+          "delay_ms": 0,
+          "motor_id": "RE",
+          "position": 1500,
+          "speed": 200
+        },
+        {
+          "delay_ms": 200,
+          "motor_id": "LE",
+          "position": 1500,
+          "speed": 200
+        },
+        {
+          "delay_ms": 0,
+          "motor_id": "R1",
+          "position": 1500,
+          "speed": 200
+        },
+        {
+          "delay_ms": 200,
+          "motor_id": "L1",
+          "position": 2500,
+          "speed": 200
+        },
+        {
+          "delay_ms": 0,
+          "motor_id": "R1",
+          "position": 1024,
+          "speed": 200
+        },
+        {
+          "delay_ms": 200,
+          "motor_id": "L1",
+          "position": 3036,
+          "speed": 200
+        },
+        {
+          "delay_ms": 0,
+          "motor_id": "R1",
+          "position": 1500,
+          "speed": 200
+        },
+        {
+          "delay_ms": 200,
+          "motor_id": "L1",
+          "position": 2500,
+          "speed": 200
+        },
+        {
+          "delay_ms": 0,
+          "motor_id": "R1",
+          "position": 1024,
+          "speed": 200
+        },
+        {
+          "delay_ms": 200,
+          "motor_id": "L1",
+          "position": 3036,
+          "speed": 200
+        },
+        {
+          "delay_ms": 0,
+          "motor_id": "R1",
+          "position": 1500,
+          "speed": 200
+        },
+        {
+          "delay_ms": 200,
+          "motor_id": "L1",
+          "position": 2500,
+          "speed": 200
+        },
+        {
+          "delay_ms": 0,
+          "motor_id": "R1",
+          "position": 1024,
+          "speed": 200
+        },
+        {
+          "delay_ms": 200,
+          "motor_id": "L1",
+          "position": 3036,
+          "speed": 200
+        },
+        {
+          "delay_ms": 0,
+          "motor_id": "R1",
+          "position": 1500,
+          "speed": 200
+        },
+        {
+          "delay_ms": 200,
+          "motor_id": "L1",
+          "position": 2500,
+          "speed": 200
+        },
+        {
+          "delay_ms": 333,
+          "motor_id": "R1",
+          "position": 2048,
+          "speed": 100
+        },
+        {
+          "delay_ms": 333,
+          "motor_id": "R2",
+          "position": 1024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 333,
+          "motor_id": "RE",
+          "position": 2048,
+          "speed": 100
+        },
+        {
+          "delay_ms": 333,
+          "motor_id": "L1",
+          "position": 2048,
+          "speed": 100
+        },
+        {
+          "delay_ms": 333,
+          "motor_id": "L2",
+          "position": 1024,
+          "speed": 100
+        },
+        {
+          "delay_ms": 333,
+          "motor_id": "LE",
+          "position": 2048,
+          "speed": 100
+        }
+      ]
+    }
+  }

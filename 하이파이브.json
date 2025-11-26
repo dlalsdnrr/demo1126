@@ -1,0 +1,66 @@
+{
+  "macros": {
+    "하이파이브": [
+      {
+        "delay_ms": 1000,
+        "motor_id": "LE",
+        "position": 2048,
+        "speed": 100
+      },
+      {
+        "delay_ms": 0,
+        "motor_id": "L1",
+        "position": 2900,
+        "speed": 100
+      },
+      {
+        "delay_ms": 0,
+        "motor_id": "L2",
+        "position": 2500,
+        "speed": 100
+      },
+      {
+        "delay_ms": 1000,
+        "motor_id": "LE",
+        "position": 1500,
+        "speed": 100
+      },
+      {
+        "delay_ms": 300,
+        "motor_id": "LE",
+        "position": 1200,
+        "speed": 100
+      },
+      {
+        "delay_ms": 500,
+        "motor_id": "LE",
+        "position": 1800,
+        "speed": 100
+      },
+      {
+        "delay_ms": 300,
+        "motor_id": "LE",
+        "position": 1500,
+        "speed": 100
+      },
+      {
+        "delay_ms": 0,
+        "motor_id": "L1",
+        "position": 2048,
+        "speed": 100
+      },
+      {
+        "delay_ms": 0,
+        "motor_id": "L2",
+        "position": 1024,
+        "speed": 100
+      },
+      {
+        "delay_ms": 1000,
+        "motor_id": "LE",
+        "position": 2048,
+        "speed": 100
+      }
+    ]
+  }
+}

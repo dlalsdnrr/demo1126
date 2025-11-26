@@ -8,6 +8,7 @@ import time
 import difflib
 import subprocess
 import json
+import threading
 import requests
 from typing import Optional, Dict, Any
 
@@ -15,6 +16,8 @@ from flask import Blueprint, jsonify, request
 import google.generativeai as genai
 
 from config import GEMINI_API_KEY, WEATHER_API_KEY
+from macros_executor import resolve_motor_id
+from serial_api import _send_command
 
 # ============================================================================
 # API 및 모듈 초기화
@@ -123,6 +126,107 @@ def get_yongin_weather() -> Optional[Dict[str, Any]]:
 # ============================================================================
 # 핵심 기능 (STT, TTS, 오디오 변환)
 # ============================================================================
+
+# --- hello.json 매크로 지원 --------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MACRO_FILES = {
+    "안녕": os.path.join(BASE_DIR, "안녕.json"),
+    "하이파이브": os.path.join(BASE_DIR, "하이파이브.json"),
+    "파이팅": os.path.join(BASE_DIR, "파이팅.json"),
+    "차렷자세": os.path.join(BASE_DIR, "차렷자세.json"),
+    "김지찬 응원가": os.path.join(BASE_DIR, "김지찬 응원가.json"),
+    "김도영 응원가": os.path.join(BASE_DIR, "김도영 응원가.json"),
+    "아웃(삐끼삐끼)": os.path.join(BASE_DIR, "아웃(삐끼삐끼).json"),
+    "외쳐라 최강기아": os.path.join(BASE_DIR, "외쳐라 최강기아.json"),
+    "홈런": os.path.join(BASE_DIR, "홈런.json"),
+}
+
+_macro_cache: Dict[str, Dict[str, Any]] = {}
+_macro_mtime: Dict[str, Optional[float]] = {key: None for key in MACRO_FILES}
+_macro_lock = threading.Lock()
+
+
+def load_macro_file(key: str) -> Dict[str, Any]:
+    path = MACRO_FILES.get(key)
+    if not path:
+        return {}
+    with _macro_lock:
+        try:
+            mtime = os.path.getmtime(path)
+        except FileNotFoundError:
+            if key not in _macro_cache:
+                print(f"⚠️ {path} 파일을 찾을 수 없습니다.")
+            _macro_cache[key] = {}
+            _macro_mtime[key] = None
+            return _macro_cache[key]
+        except Exception as e:
+            print(f"✗ {path} 상태 확인 실패: {e}")
+            _macro_cache[key] = {}
+            _macro_mtime[key] = None
+            return _macro_cache[key]
+
+        if key in _macro_cache and _macro_mtime.get(key) == mtime:
+            return _macro_cache[key]
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f) or {}
+                macros = data.get("macros", {})
+                if not isinstance(macros, dict):
+                    macros = {}
+                _macro_cache[key] = macros
+                _macro_mtime[key] = mtime
+                print(f"✓ {os.path.basename(path)} 로드 완료: {len(macros)}개 매크로")
+                return macros
+        except Exception as e:
+            print(f"✗ {path} 로드 실패: {e}")
+            _macro_cache[key] = {}
+            _macro_mtime[key] = None
+            return _macro_cache[key]
+
+
+def _run_macro_steps(steps: Any) -> bool:
+    if not isinstance(steps, list) or not steps:
+        return False
+    if _send_command is None:
+        print("✗ 시리얼 제어 모듈(_send_command) 미준비")
+        return False
+    for step in steps:
+        try:
+            motor_id = resolve_motor_id(step.get("motor_id"))
+            position = int(step.get("position"))
+            speed_raw = step.get("speed", 0)
+            speed = int(speed_raw) if str(speed_raw).lstrip("-").isdigit() else 0
+            delay_raw = step.get("delay_ms", 200)
+            delay_ms = int(delay_raw) if str(delay_raw).lstrip("-").isdigit() else 200
+        except Exception as e:
+            print(f"✗ 매크로 파싱 실패: {e}")
+            continue
+        try:
+            _send_command(motor_id, position, speed)
+        except Exception as e:
+            print(f"✗ 매크로 전송 실패: {e}")
+            return False
+        finally:
+            time.sleep(max(0, delay_ms) / 1000.0)
+    return True
+
+
+def trigger_macro(file_key: str, macro_name: str) -> bool:
+    macros = load_macro_file(file_key)
+    steps = macros.get(macro_name)
+    if not steps:
+        print(f"⚠️ {file_key}에 '{macro_name}' 매크로가 없습니다.")
+        return False
+
+    def _runner():
+        success = _run_macro_steps(steps)
+        status = "성공" if success else "실패"
+        print(f"→ {file_key} 매크로('{macro_name}') 실행 {status}")
+
+    threading.Thread(target=_runner, daemon=True).start()
+    return True
+
 
 def convert_audio_to_wav(input_bytes: bytes) -> Optional[bytes]:
     """ffmpeg로 오디오를 16kHz mono WAV로 변환"""
@@ -427,7 +531,7 @@ class VoiceAssistant:
         당신은 KBO 리그 삼성 라이온즈와 기아 타이거즈 선수들의 기록에 대해 답하고, 용인의 현재 날씨를 알려주는 친절한 AI 야구 비서입니다.
 
         # 지침:
-        1. 반드시 한국어로, 친절하고 정중하게 존댓말로 답변하세요.  # 1119 답변 이상해서 수정
+        1. 반드시 한국어로, 친절하고 정중하게 존댓말로 답변하세요.  
         2. 답변은 1-2 문장으로 짧게 유지하세요.
         3. 선수 기록 질문은 아래 `선수 기록 데이터`를 기반으로만 답하세요. 데이터에 없는 선수는 "죄송해요, 그 선수의 정보는 아직 없어요."라고 답하세요.
         4. 날씨 질문은 아래 `실시간 용인 날씨` 데이터를 기반으로 답하세요. 날씨 데이터가 없으면 "날씨 정보를 가져올 수 없었어요."라고 답하세요.
@@ -495,21 +599,46 @@ class VoiceAssistant:
                 t2 = time.time()
                 user_text = self.transcribe_audio(wav_bytes)
                 print(f"✓ STT 완료 ({time.time()-t2:.2f}s)")
-                
-                # 3. NLU
-                # player = self.find_player(user_text) if user_text else None # 기존 플레이어 찾기 로직 제거
-                # keyword = self.find_keyword(user_text) if user_text else None # 기존 키워드 찾기 로직 제거
-                
-                # 4. 텍스트 보정
-                # if player and keyword: # 기존 텍스트 보정 로직 제거
-                #     display_text = f"{player} 선수 {keyword} 알려줘"
-                # elif user_text:
-                #     display_text = user_text
-                # else:
-                #     display_text = "음성 인식 실패"
-                
-                # 5. 응답 생성
-                reply_text = self.generate_gemini_response(user_text)
+                normalized_text = (user_text or "").replace(" ", "")
+                display_text = user_text if user_text else "음성 인식 결과가 없어요."
+                handled_custom = False
+
+                custom_triggers = [
+                    {
+                        "keywords": ["안녕", "hello", "헬로"],
+                        "file": "안녕",
+                        "macro": "안녕",
+                        "display": "안녕이라고 말씀하셨어요",
+                        "reply": "안녕하세요! 무엇을 도와드릴까요?",
+                    },
+                    {
+                        "keywords": ["하이파이브", "하이파이브해", "하이파이브해줘", "hi5", "highfive"],
+                        "file": "하이파이브",
+                        "macro": "하이파이브",
+                        "display": "하이파이브 요청 감지",
+                        "reply": "하이파이브! 멋진 에너지네요!",
+                    },
+                    {
+                        "keywords": ["파이팅", "화이팅", "파이팅해", "파이팅해줘", "파잇팅"],
+                        "file": "파이팅",
+                        "macro": "파이팅",
+                        "display": "파이팅 요청 감지",
+                        "reply": "파이팅! 힘껏 응원할게요!",
+                    },
+                ]
+
+                for trig in custom_triggers:
+                    if any(key in normalized_text for key in trig["keywords"]):
+                        handled_custom = True
+                        display_text = trig["display"]
+                        triggered = trigger_macro(trig["file"], trig["macro"])
+                        if not triggered:
+                            print(f"⚠️ 매크로 실행 실패 또는 미정의: {trig['file']}::{trig['macro']}")
+                        reply_text = trig["reply"]
+                        break
+
+                if not handled_custom:
+                    reply_text = self.generate_gemini_response(user_text or "")
                 
             except Exception as e:
                 print(f"✗ 처리 실패: {e}")

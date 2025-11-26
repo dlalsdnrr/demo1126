@@ -41,6 +41,23 @@ body {
 .menu-inning-label { color: var(--muted); font-size: 12px; }
 .menu-count { display: grid; gap: 6px; background: #39404b; border: 1px solid #5a6570; border-radius: 8px; padding: 8px; }
 .menu-last-play { color: var(--muted); font-size: 12px; align-self: center; }
+.menu-demo { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.demo-btn {
+  background: linear-gradient(180deg, #1f7dd8, #165aa1);
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 600;
+  padding: 8px 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.demo-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.demo-caption { color: var(--muted); font-size: 11px; margin: 0; line-height: 1.4; }
 .stage.stage-800x480 .scoreboard .team .name { font-size: 16px; }
 .stage.stage-800x480 .scoreboard .team .runs { font-size: 22px; }
 .stage.stage-800x480 .scoreboard .meta { font-size: 12px; }

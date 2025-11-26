@@ -1,7 +1,9 @@
 (() => {
-  const POLL_MS = 2000;
-  let currentGameId = null; // 서버 설정(.env)에서 로드됩니다.
-  let lastPlayText = ''; // 이전 플레이 텍스트 저장용
+  const POLL_MS = 2000;
+  let currentGameId = null; // 서버 설정(.env)에서 로드됩니다.
+  let lastPlayText = ''; // 이전 플레이 텍스트 저장용
+  let demoRunning = false;
+  let forceDemoMode = false;
 
   const el = {
       nameAway: document.getElementById('name-away'),
@@ -59,19 +61,19 @@
       }
   };
 
-  async function fetchState() {
-      // 게임ID가 있으면 DAUM 프록시, 없으면 로컬 Mock 사용
-      if (currentGameId) {
-          const url = `/api/daum-state?gameId=${encodeURIComponent(currentGameId)}`;
-          const res = await fetch(url, { cache: 'no-store' });
-          if (!res.ok) return null;
-          return await res.json();
-      } else {
-          const res = await fetch('/api/game-state?advance=1', { cache: 'no-store' });
-          if (!res.ok) return null;
-          return await res.json();
-      }
-  }
+  async function fetchState() {
+      const useLocal = demoRunning || forceDemoMode || !currentGameId;
+      if (!useLocal) {
+          const url = `/api/daum-state?gameId=${encodeURIComponent(currentGameId)}`;
+          const res = await fetch(url, { cache: 'no-store' });
+          if (!res.ok) return null;
+          return await res.json();
+      }
+      const advanceParam = (demoRunning || forceDemoMode) ? '' : '?advance=1';
+      const res = await fetch(`/api/game-state${advanceParam}`, { cache: 'no-store' });
+      if (!res.ok) return null;
+      return await res.json();
+  }
 
   function setDots(dots, n) {
       dots.forEach((d, i) => {
@@ -98,7 +100,14 @@
       }
   }
 
-  function showPopup(text) {
+  const NON_GAME_POPUP_TYPES = new Set(['info', 'start']);
+
+  function isGameEvent(event) {
+      if (!event || !event.type) return false;
+      return !NON_GAME_POPUP_TYPES.has(event.type);
+  }
+
+  function showPopup(text) {
       const overlay = document.getElementById('popup-overlay');
       const content = document.getElementById('popup-content');
 
@@ -152,15 +161,27 @@
       updateFielders(fielders);
 
       // 플레이 텍스트 업데이트 및 팝업 표시
-      const currentPlayText = last_event?.description ?? '';
-      if (currentPlayText && currentPlayText !== lastPlayText && lastPlayText !== '') {
-          showPopup(currentPlayText);
+      const currentPlayText = last_event?.description ?? '';
+      if (currentPlayText && currentPlayText !== lastPlayText && lastPlayText !== '' && isGameEvent(last_event)) {
+          showPopup(currentPlayText);
       }
       lastPlayText = currentPlayText;
       el.lastPlayText.textContent = currentPlayText;
 
       animatePitchIfNeeded(last_event);
       maybeSendAction(last_event);
+
+      if (typeof state.demo_active === 'boolean' && state.demo_active !== demoRunning) {
+          demoRunning = state.demo_active;
+          updateDemoButton();
+          // 데모가 끝났을 때 경기 종료 상태로 유지
+          if (!demoRunning && last_event && last_event.type === 'end') {
+              forceDemoMode = true;
+          }
+      }
+      if (Object.prototype.hasOwnProperty.call(state, 'demo_step')) {
+          updateDemoCaption(state.demo_step);
+      }
   }
 
   async function tick() {
@@ -190,11 +211,77 @@
       }
   }
 
-  // 시작
-  window.addEventListener('DOMContentLoaded', async () => {
-      await loadConfig(); // 설정 먼저 로드
-      tick(); // 그 다음 게임 상태 폴링 시작
-  });
+  async function fetchDemoStatus() {
+      try {
+          const res = await fetch('/api/demo/status', { cache: 'no-store' });
+          if (!res.ok) return;
+          const data = await res.json();
+          demoRunning = Boolean(data.running);
+          updateDemoButton();
+          updateDemoCaption(data.step);
+      } catch (err) {
+          console.warn('데모 상태 조회 실패:', err);
+      }
+  }
+
+  function updateDemoCaption(stepText) {
+      const caption = document.querySelector('.demo-caption');
+      if (!caption) return;
+      if (demoRunning && stepText) {
+          caption.textContent = `진행 중: ${stepText}`;
+      } else if (demoRunning) {
+          caption.textContent = '데모 시퀀스 진행 중...';
+      } else {
+          caption.textContent = '버튼을 눌러 시나리오를 재생하세요';
+      }
+  }
+
+  function updateDemoButton() {
+      const btn = document.getElementById('demo-start-btn');
+      if (!btn) return;
+      btn.disabled = demoRunning;
+      btn.textContent = demoRunning ? '데모 진행 중' : '데모 시작';
+  }
+
+  async function startDemo() {
+      const btn = document.getElementById('demo-start-btn');
+      if (!btn || demoRunning) return;
+      btn.disabled = true;
+      updateDemoCaption('데모 준비 중...');
+      try {
+          const res = await fetch('/api/demo/start', { method: 'POST' });
+          if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              alert('데모 시작에 실패했습니다.' + (err.error ? ` (${err.error})` : ''));
+              demoRunning = false;
+              updateDemoCaption(null);
+              updateDemoButton();
+              return;
+          }
+          demoRunning = true;
+          forceDemoMode = true;
+      } catch (err) {
+          console.error('데모 시작 실패:', err);
+          alert('데모 시작 요청 중 오류가 발생했습니다.');
+      } finally {
+          updateDemoButton();
+      }
+  }
+
+  function initDemoButton() {
+      const btn = document.getElementById('demo-start-btn');
+      if (!btn) return;
+      btn.addEventListener('click', startDemo);
+      updateDemoButton();
+  }
+
+  // 시작
+  window.addEventListener('DOMContentLoaded', async () => {
+      await loadConfig(); // 설정 먼저 로드
+      initDemoButton();
+      await fetchDemoStatus();
+      tick(); // 그 다음 게임 상태 폴링 시작
+  });
 })();
 
 // --- Serial Panel Logic ---
