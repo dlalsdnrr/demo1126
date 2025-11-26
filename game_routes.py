@@ -30,6 +30,17 @@ def _initial_game_state() -> Dict[str, Any]:
         "half": "T",
         "count": {"balls": 0, "strikes": 0, "outs": 0},
         "bases": {"first": False, "second": False, "third": False},
+        "fielders": {
+            "p": {"active": True, "name": ""},
+            "c": {"active": True, "name": ""},
+            "1b": {"active": True, "name": ""},
+            "2b": {"active": True, "name": ""},
+            "3b": {"active": True, "name": ""},
+            "ss": {"active": True, "name": ""},
+            "lf": {"active": True, "name": ""},
+            "cf": {"active": True, "name": ""},
+            "rf": {"active": True, "name": ""},
+        },
         "last_event": {"type": "start", "description": "경기 시작"},
     }
 
@@ -43,7 +54,7 @@ DEMO_MACRO_MAP = {
     "아웃(삐끼삐끼)": ("아웃(삐끼삐끼)", "아웃(삐끼삐끼)"),  # out.json
     "최강기아 1125": ("김도영 응원가", "김도영 응원가"),  # kimdoyoung.json
     "홈런": ("홈런", "홈런"),  # homerun.json
-    "최강기아 + 만세 1125": ("외쳐라 최강기아", "최강기아 + 만세 1125"),  # kia.json
+    "최강기아 + 만세 1125": ("외쳐라 최강기아", "최강기아"),  # kia.json
 }
 
 
@@ -449,6 +460,7 @@ def api_game_state():
         response["teams"] = {k: dict(v) for k, v in game_state["teams"].items()}
         response["count"] = dict(game_state["count"])
         response["bases"] = dict(game_state["bases"])
+        response["fielders"] = {k: dict(v) for k, v in game_state.get("fielders", {}).items()}
         response["last_event"] = dict(game_state["last_event"]) if game_state.get("last_event") else None
     response["demo_active"] = demo_active
     response["demo_step"] = demo_runner.current_step
