@@ -147,6 +147,21 @@ _global_port_error_shown = False
 _port_error_lock = threading.Lock()
 
 
+def calculate_macro_duration(file_key: str, macro_name: str) -> float:
+    """매크로 실행 시간을 계산합니다 (초 단위)"""
+    macros = load_macro_file(file_key)
+    steps = macros.get(macro_name)
+    if not steps:
+        return 0.0
+    
+    total_ms = 0
+    for step in steps:
+        delay_ms = int(step.get("delay_ms", 200)) if str(step.get("delay_ms", "")).isdigit() else 200
+        total_ms += delay_ms
+    
+    return total_ms / 1000.0  # 밀리초를 초로 변환
+
+
 def load_macro_file(file_key: str) -> Dict[str, Any]:
     """특정 매크로 파일을 로드합니다 (캐싱 지원)"""
     path = MACRO_FILES.get(file_key)

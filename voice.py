@@ -471,6 +471,7 @@ class VoiceAssistant:
         reply_text = None
         audio_base64 = None
         display_text = "..."
+        popup_text = None
         
         # 필수 모듈 체크
         if not STT_AVAILABLE:
@@ -502,6 +503,7 @@ class VoiceAssistant:
                 normalized_text = (user_text or "").replace(" ", "")
                 display_text = user_text if user_text else "음성 인식 결과가 없어요."
                 handled_custom = False
+                popup_text = None
 
                 custom_triggers = [
                     {
@@ -509,21 +511,24 @@ class VoiceAssistant:
                         "file": "hello",
                         "macro": "안녕",
                         "display": "안녕이라고 말씀하셨어요",
-                        "reply": "안녕하세요! 무엇을 도와드릴까요?",
+                        "reply": "안녕",
+                        "popup": "안녕",
                     },
                     {
                         "keywords": ["하이파이브", "하이파이브해", "하이파이브해줘", "hi5", "highfive", "하이파이", "하이파", "파이브", "하이", "파이", "파이브해", "파이브해줘", "하이파이브요", "하이파이브해요", "하이파이브해주세요", "하이파이브해줄래", "하이파이브해줄게", "하이파이브해줄까", "하이파이브해줄래요", "하이파이브해줄게요", "하이파이브해줄까요"],
                         "file": "hifive",
                         "macro": "하이파이브",
                         "display": "하이파이브 요청 감지",
-                        "reply": "하이파이브! 멋진 에너지네요!",
+                        "reply": "하이파이브",
+                        "popup": "하이파이브",
                     },
                     {
                         "keywords": ["파이팅", "화이팅", "파이팅해", "파이팅해줘", "파잇팅", "힘내", "힘내줘", "힘내요", "파이팅요", "화이팅요", "파이팅해요", "화이팅해요", "파이팅해주세요", "화이팅해주세요", "파이팅해줄래", "화이팅해줄래", "파이팅해줄게", "화이팅해줄게", "파이팅해줄까", "화이팅해줄까", "파이팅해줄래요", "화이팅해줄래요", "파이팅해줄게요", "화이팅해줄게요", "파이팅해줄까요", "화이팅해줄까요", "파이팅이", "화이팅이", "파이팅해봐", "화이팅해봐", "파이팅해봐요", "화이팅해봐요", "파이팅하자", "화이팅하자", "파이팅하자요", "화이팅하자요"],
                         "file": "fighting",
                         "macro": "파이팅",
                         "display": "파이팅 요청 감지",
-                        "reply": "파이팅! 힘껏 응원할게요!",
+                        "reply": "파이팅",
+                        "popup": "파이팅",
                     },
                 ]
 
@@ -535,6 +540,7 @@ class VoiceAssistant:
                         if not triggered:
                             print(f"⚠️ 매크로 실행 실패 또는 미정의: {trig['file']}::{trig['macro']}")
                         reply_text = trig["reply"]
+                        popup_text = trig.get("popup")  # 팝업 텍스트
                         break
 
                 if not handled_custom:
@@ -559,7 +565,8 @@ class VoiceAssistant:
             "ok": True,
             "display_user_text": display_text,
             "reply_text": reply_text,
-            "audio_base64": audio_base64
+            "audio_base64": audio_base64,
+            "popup_text": popup_text  # 팝업 텍스트 (안녕/하이파이브/파이팅)
         }
 
 # ============================================================================

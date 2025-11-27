@@ -14,7 +14,7 @@ from macros_executor import (
     last_event_to_trigger_text,
     run_macro_by_name_async,
 )
-from macros_executor import trigger_macro
+from macros_executor import trigger_macro, calculate_macro_duration
 from config import BASEBALL_ID, RASPBERRY_PI_IP, RASPBERRY_PI_MP3_PORT, I2C_MODE
 
 
@@ -90,12 +90,12 @@ DEMO_SCENARIO_STEPS = [
         },
     },
     {
-        "delay": 3,
-        "description": "경기 시작 삼성 공격 기아 수비",
+        "delay": 2,
+        "description": "경기 시작",
         "event_type": "start",
     },
     {
-        "delay": 3,
+        "delay": 2,
         "description": "김지찬 타석 입장",
         "event_type": "live",
         "batter": {"name": "김지찬", "active": True},
@@ -109,43 +109,10 @@ DEMO_SCENARIO_STEPS = [
         "batter": {"name": "김지찬", "active": True},
     },
     {
-        "delay": 10,
-        "description": "응원 종료 후 잠시 휴식",
-        "event_type": "info",
-    },
-    {
-        "delay": 2,
-        "description": "볼",
-        "event_type": "ball",
-        "count": {"balls": 1, "strikes": 0, "outs": 0},
-        "batter": {"name": "김지찬", "active": True},
-    },
-    {
-        "delay": 2,
-        "description": "스트라이크",
-        "event_type": "strike",
-        "count": {"balls": 1, "strikes": 1, "outs": 0},
-        "batter": {"name": "김지찬", "active": True},
-    },
-    {
-        "delay": 2,
-        "description": "볼",
-        "event_type": "ball",
-        "count": {"balls": 2, "strikes": 1, "outs": 0},
-        "batter": {"name": "김지찬", "active": True},
-    },
-    {
-        "delay": 2,
-        "description": "스트라이크",
-        "event_type": "strike",
-        "count": {"balls": 2, "strikes": 2, "outs": 0},
-        "batter": {"name": "김지찬", "active": True},
-    },
-    {
         "delay": 2,
         "description": "김지찬, 삼진 아웃",
         "event_type": "strikeout",
-        "count": {"balls": 2, "strikes": 2, "outs": 1},
+        "count": {"balls": 0, "strikes": 0, "outs": 1},
         "batter": {"name": "", "active": False},
         "runners": {"first": "", "second": "", "third": ""},
     },
@@ -154,77 +121,10 @@ DEMO_SCENARIO_STEPS = [
         "description": "삐끼삐끼 동작",
         "event_type": "info",
         "macro": "아웃(삐끼삐끼)",
-        "pause_demo": True,  # 삐끼삐끼 진행 중 시나리오 일시정지
-        "pause_duration": 8,  # 삐끼삐끼 매크로 예상 실행 시간 (초)
-    },
-    {
-        "delay": 3,
-        "description": "구자욱 타석 입장",
-        "event_type": "live",
-        "batter": {"name": "구자욱", "active": True},
-        "count": {"balls": 0, "strikes": 0, "outs": 1},
     },
     {
         "delay": 2,
-        "description": "스트라이크",
-        "event_type": "strike",
-        "count": {"balls": 0, "strikes": 1, "outs": 1},
-        "batter": {"name": "구자욱", "active": True},
-    },
-    {
-        "delay": 2,
-        "description": "볼",
-        "event_type": "ball",
-        "count": {"balls": 1, "strikes": 1, "outs": 1},
-        "batter": {"name": "구자욱", "active": True},
-    },
-    {
-        "delay": 2,
-        "description": "구자욱, 우중간 안타로 1루에 출루",
-        "event_type": "single",
-        "count": {"balls": 1, "strikes": 1, "outs": 1},
-        "bases": {"first": True, "second": False, "third": False},
-        "batter": {"name": "", "active": False},
-        "runners": {"first": "구자욱", "second": "", "third": ""},
-        "hits_delta": {"away": 1},
-    },
-    {
-        "delay": 3,
-        "description": "오재일 타석 입장",
-        "event_type": "live",
-        "batter": {"name": "오재일", "active": True},
-        "count": {"balls": 0, "strikes": 0, "outs": 1},
-        "bases": {"first": True, "second": False, "third": False},
-        "runners": {"first": "구자욱", "second": "", "third": ""},
-    },
-    {
-        "delay": 2,
-        "description": "볼",
-        "event_type": "ball",
-        "count": {"balls": 1, "strikes": 0, "outs": 1},
-        "batter": {"name": "오재일", "active": True},
-        "bases": {"first": True, "second": False, "third": False},
-        "runners": {"first": "구자욱", "second": "", "third": ""},
-    },
-    {
-        "delay": 2,
-        "description": "오재일, 플라이 아웃",
-        "event_type": "out",
-        "count": {"balls": 1, "strikes": 0, "outs": 2},
-        "bases": {"first": True, "second": False, "third": False},
-        "batter": {"name": "", "active": False},
-        "runners": {"first": "구자욱", "second": "", "third": ""},
-    },
-    {
-        "delay": 3,
-        "description": "이닝 종료",
-        "event_type": "change",
-        "count": {"balls": 0, "strikes": 0, "outs": 0},
-        "bases": {"first": False, "second": False, "third": False},
-    },
-    {
-        "delay": 3,
-        "description": "공수 교대 기아 공격 삼성 수비",
+        "description": "공수 교대",
         "event_type": "change",
         "half": "B",
         "count": {"balls": 0, "strikes": 0, "outs": 0},
@@ -248,7 +148,7 @@ DEMO_SCENARIO_STEPS = [
         "macro": "차렷자세",
     },
     {
-        "delay": 3,
+        "delay": 2,
         "description": "김도영 타석 입장",
         "event_type": "live",
         "batter": {"name": "김도영", "active": True},
@@ -262,52 +162,13 @@ DEMO_SCENARIO_STEPS = [
         "batter": {"name": "김도영", "active": True},
     },
     {
-        "delay": 10,
-        "description": "응원 종료",
-        "event_type": "info",
-    },
-    {
-        "delay": 0,
-        "description": "기본 자세 복귀",
-        "event_type": "info",
-        "macro": "차렷자세",
-    },
-    {
-        "delay": 2,
-        "description": "스트라이크",
-        "event_type": "strike",
-        "count": {"balls": 0, "strikes": 1, "outs": 0},
-        "batter": {"name": "김도영", "active": True},
-    },
-    {
-        "delay": 2,
-        "description": "볼",
-        "event_type": "ball",
-        "count": {"balls": 1, "strikes": 1, "outs": 0},
-        "batter": {"name": "김도영", "active": True},
-    },
-    {
-        "delay": 2,
-        "description": "볼",
-        "event_type": "ball",
-        "count": {"balls": 2, "strikes": 1, "outs": 0},
-        "batter": {"name": "김도영", "active": True},
-    },
-    {
-        "delay": 2,
-        "description": "스트라이크",
-        "event_type": "strike",
-        "count": {"balls": 2, "strikes": 2, "outs": 0},
-        "batter": {"name": "김도영", "active": True},
-    },
-    {
         "delay": 2,
         "description": "김도영 좌중월 솔로 홈런!",
         "event_type": "hr",
         "score_delta": {"home": 1},
         "hits_delta": {"home": 1},
         "bases": {"first": False, "second": False, "third": False},
-        "count": {"balls": 2, "strikes": 2, "outs": 0},
+        "count": {"balls": 0, "strikes": 0, "outs": 0},
         "batter": {"name": "", "active": False},
         "runners": {"first": "", "second": "", "third": ""},
     },
@@ -318,97 +179,16 @@ DEMO_SCENARIO_STEPS = [
         "macro": "홈런",
     },
     {
-        "delay": 5,
-        "description": "홈런 연출 유지",
-        "event_type": "info",
-    },
-    {
-        "delay": 2,
-        "description": "최형우 타석 입장",
-        "event_type": "live",
-        "batter": {"name": "최형우", "active": True},
-        "count": {"balls": 0, "strikes": 0, "outs": 0},
-    },
-    {
-        "delay": 2,
-        "description": "볼",
-        "event_type": "ball",
-        "count": {"balls": 1, "strikes": 0, "outs": 0},
-        "batter": {"name": "최형우", "active": True},
-    },
-    {
-        "delay": 2,
-        "description": "스트라이크",
-        "event_type": "strike",
-        "count": {"balls": 1, "strikes": 1, "outs": 0},
-        "batter": {"name": "최형우", "active": True},
-    },
-    {
-        "delay": 2,
-        "description": "스트라이크",
-        "event_type": "strike",
-        "count": {"balls": 1, "strikes": 2, "outs": 0},
-        "batter": {"name": "최형우", "active": True},
-    },
-    {
-        "delay": 2,
-        "description": "최형우, 중전 안타로 1루에 출루",
-        "event_type": "single",
-        "count": {"balls": 1, "strikes": 2, "outs": 0},
-        "bases": {"first": True, "second": False, "third": False},
-        "batter": {"name": "", "active": False},
-        "runners": {"first": "최형우", "second": "", "third": ""},
-        "hits_delta": {"home": 1},
-    },
-    {
-        "delay": 3,
-        "description": "박찬호 타석 입장",
-        "event_type": "live",
-        "batter": {"name": "박찬호", "active": True},
-        "count": {"balls": 0, "strikes": 0, "outs": 0},
-        "bases": {"first": True, "second": False, "third": False},
-        "runners": {"first": "최형우", "second": "", "third": ""},
-    },
-    {
-        "delay": 2,
-        "description": "볼",
-        "event_type": "ball",
-        "count": {"balls": 1, "strikes": 0, "outs": 0},
-        "batter": {"name": "박찬호", "active": True},
-        "bases": {"first": True, "second": False, "third": False},
-        "runners": {"first": "최형우", "second": "", "third": ""},
-    },
-    {
-        "delay": 2,
-        "description": "박찬호, 번트로 아웃, 주자는 2루로 진루",
-        "event_type": "out",
-        "count": {"balls": 1, "strikes": 0, "outs": 1},
-        "bases": {"first": False, "second": True, "third": False},
-        "batter": {"name": "", "active": False},
-        "runners": {"first": "", "second": "최형우", "third": ""},
-    },
-    {
-        "delay": 3,
-        "description": "이닝 종료",
-        "event_type": "change",
-        "count": {"balls": 0, "strikes": 0, "outs": 0},
-        "bases": {"first": False, "second": False, "third": False},
-    },
-    {
         "delay": 0,
+        "description": "기본 자세 복귀",
+        "event_type": "info",
+        "macro": "차렷자세",
+    },
+    {
+        "delay": 2,
         "description": "기아 우승! 열광하라",
-        "event_type": "info",
-        "macro": "최강기아",
-    },
-    {
-        "delay": 10,
-        "description": "열광 연출 유지",
-        "event_type": "info",
-    },
-    {
-        "delay": 0,
-        "description": "경기 종료 – KIA 승리",
         "event_type": "end",
+        "macro": "최강기아",
         "set_scores": {"home": 1, "away": 0},
         "half": "F",
         "popup_description": "🏆 KIA 타이거즈 우승 🏆",
@@ -426,7 +206,7 @@ class DemoScenarioRunner:
     def __init__(self) -> None:
         self._thread: Optional[threading.Thread] = None
         self._running = False
-        self._paused = False
+        self._paused = False  # 사용자가 일시정지한 경우만 True
         self._stop_event = threading.Event()
         self._pause_event = threading.Event()
         self._pause_event.set()  # 초기에는 일시정지 해제 상태
@@ -607,15 +387,6 @@ class DemoScenarioRunner:
                 }
             # 응원가, 휴식 등은 last_event를 업데이트하지 않음 (이전 경기 이벤트 유지)
 
-        # 삐끼삐끼 진행 중 시나리오 일시정지 처리
-        if step.get("pause_demo"):
-            pause_duration = float(step.get("pause_duration", 8))
-            self.pause()
-            print(f"⏸️ 데모 일시정지: {step.get('description', '')} ({pause_duration}초)")
-            time.sleep(pause_duration)
-            self.resume()
-            print(f"▶️ 데모 재개")
-
         macro_name = step.get("macro")
         if macro_name:
             # MP3 파일 매핑
@@ -629,18 +400,33 @@ class DemoScenarioRunner:
                 "최강기아": "best_kia.mp3",  # DEMO_MACRO_MAP의 키와 일치
             }
             
-            # MP3 재생 (라즈베리파이로 전송)
-            mp3_file = MP3_MAP.get(macro_name)
-            if mp3_file:
-                _play_mp3_on_raspberry(mp3_file)
-            
             file_key, macro_key = DEMO_MACRO_MAP.get(macro_name, (None, None))
             if file_key and macro_key:
                 try:
+                    # 매크로 실행 시간 계산
+                    macro_duration = calculate_macro_duration(file_key, macro_key)
+                    
+                    # MP3 재생 (매크로 시작 전에 재생 시작)
+                    mp3_file = MP3_MAP.get(macro_name)
+                    if mp3_file:
+                        _play_mp3_on_raspberry(mp3_file)
+                        # MP3 재생 시작 후 약간의 딜레이 (MP3와 동작 싱크 맞추기)
+                        time.sleep(0.3)
+                    
+                    # 매크로 실행 (비동기)
                     success = trigger_macro(file_key, macro_key)
                     if not success:
                         print(f"⚠️ 데모 매크로 '{file_key}:{macro_key}' 실행 실패")
                         print(f"  → 매크로 파일 '{file_key}' 또는 매크로 이름 '{macro_key}' 확인 필요")
+                    else:
+                        # 매크로 실행 중 시나리오 일시정지 (내부적으로만 처리, 사용자 일시정지와 구분)
+                        if macro_duration > 0:
+                            # _paused는 변경하지 않고 _pause_event만 제어 (사용자 일시정지와 구분)
+                            self._pause_event.clear()
+                            print(f"⏸️ 매크로 실행 중: {step.get('description', '')} ({macro_duration:.1f}초)")
+                            time.sleep(macro_duration)
+                            self._pause_event.set()
+                            print(f"▶️ 매크로 완료, 시나리오 재개")
                 except Exception as e:
                     print(f"✗ 데모 매크로 '{file_key}:{macro_key}' 실행 중 예외 발생: {type(e).__name__}: {e}")
             else:
@@ -900,6 +686,16 @@ def api_demo_resume():
     if demo_runner.resume():
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": "demo_not_running_or_not_paused"}), 400
+
+
+@game_bp.route("/api/demo/restart", methods=["POST"])
+def api_demo_restart():
+    """데모를 처음부터 다시 시작합니다"""
+    demo_runner.stop()
+    time.sleep(0.5)  # 정지 완료 대기
+    if demo_runner.start():
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": "demo_start_failed"}), 500
 
 
 @game_bp.route("/api/config")

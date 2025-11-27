@@ -222,7 +222,8 @@
       return GAME_PLAY_EVENTS.has(event.type);
   }
 
-  function showPopup(text, isVictory = false) {
+  // 전역으로 노출 (voice_overlay.js에서 사용)
+  window.showPopup = function(text, isVictory = false) {
       const overlay = document.getElementById('popup-overlay');
       const content = document.getElementById('popup-content');
       const stage = document.querySelector('.stage');
@@ -405,9 +406,7 @@
           demoPaused = state.demo_paused;
           updateDemoButton();
       }
-      if (Object.prototype.hasOwnProperty.call(state, 'demo_step')) {
-          updateDemoCaption(state.demo_step);
-      }
+      // demo_step은 더 이상 표시하지 않음
   }
 
   async function tick() {
@@ -445,33 +444,46 @@
           demoRunning = Boolean(data.running);
           demoPaused = Boolean(data.paused);
           updateDemoButton();
-          updateDemoCaption(data.step);
       } catch (err) {
           console.warn('데모 상태 조회 실패:', err);
       }
   }
 
-  function updateDemoCaption(stepText) {
-      const caption = document.querySelector('.demo-caption');
-      if (!caption) return;
-      if (demoRunning && stepText) {
-          caption.textContent = `진행 중: ${stepText}`;
-      } else if (demoRunning) {
-          caption.textContent = '데모 시퀀스 진행 중...';
-      } else {
-          caption.textContent = '버튼을 눌러 시나리오를 재생하세요';
-      }
-  }
-
   function updateDemoButton() {
       const btn = document.getElementById('demo-start-btn');
+      const restartBtn = document.getElementById('demo-restart-btn');
       if (!btn) return;
       if (demoRunning) {
           btn.disabled = false;
           btn.textContent = demoPaused ? '데모 재시작' : '데모 멈춤';
+          if (restartBtn) restartBtn.style.display = 'block';
       } else {
           btn.disabled = false;
           btn.textContent = '데모 시작';
+          if (restartBtn) restartBtn.style.display = 'none';
+      }
+  }
+
+  async function restartDemo() {
+      const btn = document.getElementById('demo-restart-btn');
+      if (!btn) return;
+      btn.disabled = true;
+      try {
+          const res = await fetch('/api/demo/restart', { method: 'POST' });
+          if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              alert('데모 재시작에 실패했습니다.' + (err.error ? ` (${err.error})` : ''));
+              return;
+          }
+          // 상태 동기화
+          await fetchDemoStatus();
+          forceDemoMode = true;
+          updateDemoButton();
+      } catch (err) {
+          console.error('데모 재시작 실패:', err);
+          alert('데모 재시작 요청 중 오류가 발생했습니다.');
+      } finally {
+          btn.disabled = false;
       }
   }
 
@@ -515,7 +527,6 @@
       } else {
           // 데모 시작
           btn.disabled = true;
-          updateDemoCaption('데모 준비 중...');
           // 데모 시작 시 우승 팝업 관련 상태 리셋 (다시 팝업이 뜰 수 있도록)
           victoryPopupDismissed = false;
           lastPopupText = '';
@@ -531,12 +542,11 @@
           try {
               const res = await fetch('/api/demo/start', { method: 'POST' });
               if (!res.ok) {
-                  const err = await res.json().catch(() => ({}));
-                  alert('데모 시작에 실패했습니다.' + (err.error ? ` (${err.error})` : ''));
-                  demoRunning = false;
-                  updateDemoCaption(null);
-                  updateDemoButton();
-                  return;
+              const err = await res.json().catch(() => ({}));
+              alert('데모 시작에 실패했습니다.' + (err.error ? ` (${err.error})` : ''));
+              demoRunning = false;
+              updateDemoButton();
+              return;
               }
               demoRunning = true;
               demoPaused = false;
@@ -552,8 +562,12 @@
 
   function initDemoButton() {
       const btn = document.getElementById('demo-start-btn');
+      const restartBtn = document.getElementById('demo-restart-btn');
       if (!btn) return;
       btn.addEventListener('click', toggleDemo);
+      if (restartBtn) {
+          restartBtn.addEventListener('click', restartDemo);
+      }
       updateDemoButton();
   }
 
