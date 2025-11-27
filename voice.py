@@ -247,7 +247,7 @@ def get_tts_audio(text: str) -> Optional[str]:
     return None
 
 def load_whisper_model() -> Optional[Any]:
-    """Faster Whisper 모델 초기화"""
+    """Faster Whisper 모델 초기화 (처리 시간 최적화)"""
     global WHISPER_MODEL, STT_AVAILABLE
     
     if not STT_AVAILABLE:
@@ -255,7 +255,7 @@ def load_whisper_model() -> Optional[Any]:
     
     if WHISPER_MODEL is None:
         try:
-            model_name = "small"
+            model_name = "tiny"  # small -> tiny로 변경 (더 빠른 처리)
             print(f"→ Whisper 모델 로딩 중 ({model_name})...")
             WHISPER_MODEL = WhisperModel(
                 model_name,
@@ -368,14 +368,13 @@ class VoiceAssistant:
                 f.write(audio_bytes)
                 temp_path = f.name
             
-            # Whisper 변환 (균형잡힌 설정)
+            # Whisper 변환 (처리 시간 최적화 설정)
             print("→ STT 처리 중...")
             segments, info = self.whisper_model.transcribe(
                 temp_path,
                 language="ko",
                 beam_size=5,              # 더 정확한 디코딩
                 best_of=5,                # 최상의 결과 선택
-                temperature=0.0,          # 확정적 결과 (랜덤성 제거)
                 vad_filter=True,          # 음성 구간만 감지
                 vad_parameters={
                     "threshold": 0.3,                # 음성 감지 임계값 (관대하게)
@@ -520,7 +519,7 @@ class VoiceAssistant:
                         "reply": "하이파이브! 멋진 에너지네요!",
                     },
                     {
-                        "keywords": ["파이팅", "화이팅", "파이팅해", "파이팅해줘", "파잇팅"],
+                        "keywords": ["파이팅", "화이팅", "파이팅해", "파이팅해줘", "파잇팅", "힘내", "힘내줘", "힘내요"],
                         "file": "fighting",
                         "macro": "파이팅",
                         "display": "파이팅 요청 감지",
