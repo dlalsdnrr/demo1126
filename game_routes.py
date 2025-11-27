@@ -415,26 +415,52 @@ class DemoScenarioRunner:
     def __init__(self) -> None:
         self._thread: Optional[threading.Thread] = None
         self._running = False
+        self._paused = False
         self._stop_event = threading.Event()
+        self._pause_event = threading.Event()
+        self._pause_event.set()  # 초기에는 일시정지 해제 상태
         self.current_step: Optional[str] = None
+        self._step_index = 0  # 현재 진행 중인 스텝 인덱스
 
     @property
     def is_running(self) -> bool:
         return self._running
 
+    @property
+    def is_paused(self) -> bool:
+        return self._paused
+
     def start(self) -> bool:
         if self._running:
             return False
         self._stop_event.clear()
+        self._pause_event.set()  # 시작 시 일시정지 해제
+        self._paused = False
+        self._step_index = 0
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
         self._running = True
+        return True
+
+    def pause(self) -> bool:
+        if not self._running or self._paused:
+            return False
+        self._paused = True
+        self._pause_event.clear()  # 일시정지
+        return True
+
+    def resume(self) -> bool:
+        if not self._running or not self._paused:
+            return False
+        self._paused = False
+        self._pause_event.set()  # 재개
         return True
 
     def stop(self) -> None:
         if not self._running:
             return
         self._stop_event.set()
+        self._pause_event.set()  # 정지 시 일시정지 해제
         if self._thread:
             self._thread.join(timeout=1)
 
@@ -445,24 +471,47 @@ class DemoScenarioRunner:
                 game_state = _initial_game_state()
                 game_state["teams"]["home"]["name"] = "기아"
                 game_state["teams"]["away"]["name"] = "삼성"
-            for step in DEMO_SCENARIO_STEPS:
+            for idx, step in enumerate(DEMO_SCENARIO_STEPS):
                 if self._stop_event.is_set():
                     break
+                self._step_index = idx
                 self.current_step = step.get("description")
+                
+                # 일시정지 대기
+                self._pause_event.wait()
+                
+                if self._stop_event.is_set():
+                    break
+                
                 delay = float(step.get("delay", 0))
                 if delay > 0:
                     waited = 0.0
                     while waited < delay and not self._stop_event.is_set():
+                        # 일시정지 중이면 대기
+                        self._pause_event.wait()
+                        if self._stop_event.is_set():
+                            break
                         chunk = min(0.5, delay - waited)
                         time.sleep(chunk)
                         waited += chunk
+                
                 if self._stop_event.is_set():
                     break
+                
+                # 일시정지 대기
+                self._pause_event.wait()
+                
+                if self._stop_event.is_set():
+                    break
+                
                 self._apply_step(step)
             self.current_step = None
+            self._step_index = 0
         finally:
             self._running = False
+            self._paused = False
             self._stop_event.clear()
+            self._pause_event.set()
 
     def _apply_step(self, step: Dict[str, Any]) -> None:
         global game_state
@@ -695,6 +744,7 @@ def api_game_state():
     global game_state
     should_advance = request.args.get("advance", "0") == "1"
     demo_active = demo_runner.is_running
+    # 데모가 실행 중이거나 일시정지 중이면 자동 진행 비활성화
     with lock:
         if should_advance and not demo_active:
             _advance_random_event(game_state)
@@ -708,6 +758,7 @@ def api_game_state():
         response["fielders"] = {k: dict(v) for k, v in game_state.get("fielders", {}).items()}
         response["last_event"] = dict(game_state["last_event"]) if game_state.get("last_event") else None
     response["demo_active"] = demo_active
+    response["demo_paused"] = demo_runner.is_paused
     response["demo_step"] = demo_runner.current_step
 
     # 락 밖에서 비동기 매크로 트리거 (락 홀드 시간 최소화)
@@ -735,7 +786,26 @@ def api_demo_start():
 
 @game_bp.route("/api/demo/status")
 def api_demo_status():
-    return jsonify({"ok": True, "running": demo_runner.is_running, "step": demo_runner.current_step})
+    return jsonify({
+        "ok": True,
+        "running": demo_runner.is_running,
+        "paused": demo_runner.is_paused,
+        "step": demo_runner.current_step
+    })
+
+
+@game_bp.route("/api/demo/pause", methods=["POST"])
+def api_demo_pause():
+    if demo_runner.pause():
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": "demo_not_running_or_already_paused"}), 400
+
+
+@game_bp.route("/api/demo/resume", methods=["POST"])
+def api_demo_resume():
+    if demo_runner.resume():
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": "demo_not_running_or_not_paused"}), 400
 
 
 @game_bp.route("/api/config")

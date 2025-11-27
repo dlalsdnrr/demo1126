@@ -5,6 +5,7 @@
   let lastPopupText = ''; // 이전 팝업 텍스트 저장용
   let victoryPopupDismissed = false; // 우승 팝업이 닫혔는지 여부
   let demoRunning = false;
+  let demoPaused = false;
   let forceDemoMode = false;
 
   const el = {
@@ -78,7 +79,9 @@
           if (!res.ok) return null;
           return await res.json();
       }
-      const advanceParam = (demoRunning || forceDemoMode) ? '' : '?advance=1';
+      // 데모가 실행 중이거나 일시정지 중이면 자동 진행 비활성화
+      // 초기 상태에서도 자동 진행 비활성화 (데모 시작 전까지 멈춤)
+      const advanceParam = (demoRunning || forceDemoMode) ? '' : '';
       const res = await fetch(`/api/game-state${advanceParam}`, { cache: 'no-store' });
       if (!res.ok) return null;
       return await res.json();
@@ -398,6 +401,10 @@
               forceDemoMode = true;
           }
       }
+      if (typeof state.demo_paused === 'boolean' && state.demo_paused !== demoPaused) {
+          demoPaused = state.demo_paused;
+          updateDemoButton();
+      }
       if (Object.prototype.hasOwnProperty.call(state, 'demo_step')) {
           updateDemoCaption(state.demo_step);
       }
@@ -436,6 +443,7 @@
           if (!res.ok) return;
           const data = await res.json();
           demoRunning = Boolean(data.running);
+          demoPaused = Boolean(data.paused);
           updateDemoButton();
           updateDemoCaption(data.step);
       } catch (err) {
@@ -458,51 +466,94 @@
   function updateDemoButton() {
       const btn = document.getElementById('demo-start-btn');
       if (!btn) return;
-      btn.disabled = demoRunning;
-      btn.textContent = demoRunning ? '데모 진행 중' : '데모 시작';
+      if (demoRunning) {
+          btn.disabled = false;
+          btn.textContent = demoPaused ? '데모 재시작' : '데모 멈춤';
+      } else {
+          btn.disabled = false;
+          btn.textContent = '데모 시작';
+      }
   }
 
-  async function startDemo() {
+  async function toggleDemo() {
       const btn = document.getElementById('demo-start-btn');
-      if (!btn || demoRunning) return;
-      btn.disabled = true;
-      updateDemoCaption('데모 준비 중...');
-      // 데모 시작 시 우승 팝업 관련 상태 리셋 (다시 팝업이 뜰 수 있도록)
-      victoryPopupDismissed = false;
-      lastPopupText = '';
-      // 팝업 오버레이도 닫힌 상태로 리셋
-      const overlay = document.getElementById('popup-overlay');
-      if (overlay) {
-          overlay.classList.remove('show', 'victory');
-          const stage = document.querySelector('.stage');
-          if (stage) {
-              stage.classList.remove('victory-mode');
+      if (!btn) return;
+      
+      // 데모가 실행 중이면 멈춤/재시작
+      if (demoRunning) {
+          if (demoPaused) {
+              // 재시작
+              try {
+                  const res = await fetch('/api/demo/resume', { method: 'POST' });
+                  if (!res.ok) {
+                      const err = await res.json().catch(() => ({}));
+                      alert('데모 재시작에 실패했습니다.' + (err.error ? ` (${err.error})` : ''));
+                      return;
+                  }
+                  demoPaused = false;
+                  updateDemoButton();
+              } catch (err) {
+                  console.error('데모 재시작 실패:', err);
+                  alert('데모 재시작 요청 중 오류가 발생했습니다.');
+              }
+          } else {
+              // 멈춤
+              try {
+                  const res = await fetch('/api/demo/pause', { method: 'POST' });
+                  if (!res.ok) {
+                      const err = await res.json().catch(() => ({}));
+                      alert('데모 멈춤에 실패했습니다.' + (err.error ? ` (${err.error})` : ''));
+                      return;
+                  }
+                  demoPaused = true;
+                  updateDemoButton();
+              } catch (err) {
+                  console.error('데모 멈춤 실패:', err);
+                  alert('데모 멈춤 요청 중 오류가 발생했습니다.');
+              }
           }
-      }
-      try {
-          const res = await fetch('/api/demo/start', { method: 'POST' });
-          if (!res.ok) {
-              const err = await res.json().catch(() => ({}));
-              alert('데모 시작에 실패했습니다.' + (err.error ? ` (${err.error})` : ''));
-              demoRunning = false;
-              updateDemoCaption(null);
+      } else {
+          // 데모 시작
+          btn.disabled = true;
+          updateDemoCaption('데모 준비 중...');
+          // 데모 시작 시 우승 팝업 관련 상태 리셋 (다시 팝업이 뜰 수 있도록)
+          victoryPopupDismissed = false;
+          lastPopupText = '';
+          // 팝업 오버레이도 닫힌 상태로 리셋
+          const overlay = document.getElementById('popup-overlay');
+          if (overlay) {
+              overlay.classList.remove('show', 'victory');
+              const stage = document.querySelector('.stage');
+              if (stage) {
+                  stage.classList.remove('victory-mode');
+              }
+          }
+          try {
+              const res = await fetch('/api/demo/start', { method: 'POST' });
+              if (!res.ok) {
+                  const err = await res.json().catch(() => ({}));
+                  alert('데모 시작에 실패했습니다.' + (err.error ? ` (${err.error})` : ''));
+                  demoRunning = false;
+                  updateDemoCaption(null);
+                  updateDemoButton();
+                  return;
+              }
+              demoRunning = true;
+              demoPaused = false;
+              forceDemoMode = true;
+          } catch (err) {
+              console.error('데모 시작 실패:', err);
+              alert('데모 시작 요청 중 오류가 발생했습니다.');
+          } finally {
               updateDemoButton();
-              return;
           }
-          demoRunning = true;
-          forceDemoMode = true;
-      } catch (err) {
-          console.error('데모 시작 실패:', err);
-          alert('데모 시작 요청 중 오류가 발생했습니다.');
-      } finally {
-          updateDemoButton();
       }
   }
 
   function initDemoButton() {
       const btn = document.getElementById('demo-start-btn');
       if (!btn) return;
-      btn.addEventListener('click', startDemo);
+      btn.addEventListener('click', toggleDemo);
       updateDemoButton();
   }
 
