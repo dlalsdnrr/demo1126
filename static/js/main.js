@@ -5,7 +5,6 @@
   let lastPopupText = ''; // 이전 팝업 텍스트 저장용
   let victoryPopupDismissed = false; // 우승 팝업이 닫혔는지 여부
   let demoRunning = false;
-  let demoPaused = false;
   let forceDemoMode = false;
 
   const el = {
@@ -393,9 +392,6 @@
 
       if (typeof state.demo_active === 'boolean' && state.demo_active !== demoRunning) {
           demoRunning = state.demo_active;
-          if (!demoRunning) {
-              demoPaused = false;
-          }
           updateDemoButton();
           // 데모가 끝났을 때 경기 종료 상태로 유지
           if (!demoRunning && last_event && last_event.type === 'end') {
@@ -409,15 +405,8 @@
 
   async function tick() {
       try {
-          // 데모가 실행 중이 아니면 상태를 가져오지 않음 (UI 업데이트 중지)
-          if (!demoRunning && !forceDemoMode) {
-              setTimeout(tick, POLL_MS);
-              return;
-          }
           const state = await fetchState();
-          if (state) {
-              render(state);
-          }
+          render(state);
       } catch (e) {
           console.error(e);
       } finally {
@@ -447,7 +436,6 @@
           if (!res.ok) return;
           const data = await res.json();
           demoRunning = Boolean(data.running);
-          demoPaused = Boolean(data.paused);
           updateDemoButton();
           updateDemoCaption(data.step);
       } catch (err) {
@@ -468,51 +456,15 @@
   }
 
   function updateDemoButton() {
-      const startBtn = document.getElementById('demo-start-btn');
-      const pauseBtn = document.getElementById('demo-pause-btn');
-      if (!startBtn) return;
-      
-      if (demoRunning) {
-          startBtn.disabled = true;
-          startBtn.textContent = demoPaused ? '데모 재시작' : '데모 진행 중';
-          if (pauseBtn) {
-              pauseBtn.style.display = 'block';
-              pauseBtn.disabled = false;
-              pauseBtn.textContent = demoPaused ? '데모 재시작' : '데모 멈춤';
-          }
-      } else {
-          startBtn.disabled = false;
-          startBtn.textContent = '데모 시작';
-          if (pauseBtn) {
-              pauseBtn.style.display = 'none';
-          }
-      }
+      const btn = document.getElementById('demo-start-btn');
+      if (!btn) return;
+      btn.disabled = demoRunning;
+      btn.textContent = demoRunning ? '데모 진행 중' : '데모 시작';
   }
 
   async function startDemo() {
       const btn = document.getElementById('demo-start-btn');
-      if (!btn) return;
-      
-      // 재시작인 경우
-      if (demoPaused) {
-          try {
-              const res = await fetch('/api/demo/resume', { method: 'POST' });
-              if (!res.ok) {
-                  const err = await res.json().catch(() => ({}));
-                  alert('데모 재시작에 실패했습니다.' + (err.error ? ` (${err.error})` : ''));
-                  return;
-              }
-              demoPaused = false;
-              updateDemoButton();
-          } catch (err) {
-              console.error('데모 재시작 실패:', err);
-              alert('데모 재시작 요청 중 오류가 발생했습니다.');
-          }
-          return;
-      }
-      
-      // 처음 시작인 경우
-      if (demoRunning) return;
+      if (!btn || demoRunning) return;
       btn.disabled = true;
       updateDemoCaption('데모 준비 중...');
       // 데모 시작 시 우승 팝업 관련 상태 리셋 (다시 팝업이 뜰 수 있도록)
@@ -528,7 +480,7 @@
           }
       }
       try {
-          const res = await fetch('/api/demo/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resume: false }) });
+          const res = await fetch('/api/demo/start', { method: 'POST' });
           if (!res.ok) {
               const err = await res.json().catch(() => ({}));
               alert('데모 시작에 실패했습니다.' + (err.error ? ` (${err.error})` : ''));
@@ -538,7 +490,6 @@
               return;
           }
           demoRunning = true;
-          demoPaused = false;
           forceDemoMode = true;
       } catch (err) {
           console.error('데모 시작 실패:', err);
@@ -548,53 +499,10 @@
       }
   }
 
-  async function pauseDemo() {
-      const pauseBtn = document.getElementById('demo-pause-btn');
-      if (!pauseBtn || !demoRunning) return;
-      
-      // 재시작인 경우
-      if (demoPaused) {
-          try {
-              const res = await fetch('/api/demo/resume', { method: 'POST' });
-              if (!res.ok) {
-                  const err = await res.json().catch(() => ({}));
-                  alert('데모 재시작에 실패했습니다.' + (err.error ? ` (${err.error})` : ''));
-                  return;
-              }
-              demoPaused = false;
-              updateDemoButton();
-          } catch (err) {
-              console.error('데모 재시작 실패:', err);
-              alert('데모 재시작 요청 중 오류가 발생했습니다.');
-          }
-          return;
-      }
-      
-      // 멈춤인 경우
-      try {
-          const res = await fetch('/api/demo/pause', { method: 'POST' });
-          if (!res.ok) {
-              const err = await res.json().catch(() => ({}));
-              alert('데모 멈춤에 실패했습니다.' + (err.error ? ` (${err.error})` : ''));
-              return;
-          }
-          demoPaused = true;
-          updateDemoButton();
-      } catch (err) {
-          console.error('데모 멈춤 실패:', err);
-          alert('데모 멈춤 요청 중 오류가 발생했습니다.');
-      }
-  }
-
   function initDemoButton() {
-      const startBtn = document.getElementById('demo-start-btn');
-      const pauseBtn = document.getElementById('demo-pause-btn');
-      if (startBtn) {
-          startBtn.addEventListener('click', startDemo);
-      }
-      if (pauseBtn) {
-          pauseBtn.addEventListener('click', pauseDemo);
-      }
+      const btn = document.getElementById('demo-start-btn');
+      if (!btn) return;
+      btn.addEventListener('click', startDemo);
       updateDemoButton();
   }
 

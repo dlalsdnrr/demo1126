@@ -415,122 +415,54 @@ class DemoScenarioRunner:
     def __init__(self) -> None:
         self._thread: Optional[threading.Thread] = None
         self._running = False
-        self._paused = False
         self._stop_event = threading.Event()
-        self._pause_event = threading.Event()
         self.current_step: Optional[str] = None
-        self._current_step_index = 0  # 현재 실행 중인 스텝 인덱스
 
     @property
     def is_running(self) -> bool:
         return self._running
 
-    @property
-    def is_paused(self) -> bool:
-        return self._paused
-
-    def start(self, resume: bool = False) -> bool:
-        if self._running and not self._paused:
-            return False
-        if resume and self._paused:
-            # 재시작: 멈춘 지점부터 계속
-            self._pause_event.set()
-            self._paused = False
-            return True
-        # 처음 시작: 처음부터
+    def start(self) -> bool:
         if self._running:
-            self.stop()
+            return False
         self._stop_event.clear()
-        self._pause_event.clear()
-        self._current_step_index = 0
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
         self._running = True
-        self._paused = False
         return True
 
     def stop(self) -> None:
         if not self._running:
             return
         self._stop_event.set()
-        self._pause_event.set()  # 일시정지 상태도 해제
         if self._thread:
             self._thread.join(timeout=1)
-        self._running = False
-        self._paused = False
-
-    def pause(self) -> None:
-        """데모를 일시정지합니다 (멈춘 지점부터 재시작 가능)"""
-        if not self._running or self._paused:
-            return
-        self._paused = True
-        self._pause_event.clear()
-
-    def resume(self) -> bool:
-        """일시정지된 데모를 재시작합니다"""
-        if not self._paused:
-            return False
-        self._pause_event.set()
-        self._paused = False
-        return True
 
     def _run(self) -> None:
         global game_state
         try:
-            # 처음 시작할 때만 게임 상태 초기화
-            if self._current_step_index == 0:
-                with lock:
-                    game_state = _initial_game_state()
-                    game_state["teams"]["home"]["name"] = "기아"
-                    game_state["teams"]["away"]["name"] = "삼성"
-            
-            # 현재 스텝 인덱스부터 실행
-            for i in range(self._current_step_index, len(DEMO_SCENARIO_STEPS)):
+            with lock:
+                game_state = _initial_game_state()
+                game_state["teams"]["home"]["name"] = "기아"
+                game_state["teams"]["away"]["name"] = "삼성"
+            for step in DEMO_SCENARIO_STEPS:
                 if self._stop_event.is_set():
                     break
-                
-                # 일시정지 대기
-                if self._paused:
-                    self._pause_event.wait()
-                    if self._stop_event.is_set():
-                        break
-                
-                step = DEMO_SCENARIO_STEPS[i]
-                self._current_step_index = i
                 self.current_step = step.get("description")
-                
                 delay = float(step.get("delay", 0))
                 if delay > 0:
                     waited = 0.0
                     while waited < delay and not self._stop_event.is_set():
-                        # 일시정지 체크
-                        if self._paused:
-                            self._pause_event.wait()
-                            if self._stop_event.is_set():
-                                break
                         chunk = min(0.5, delay - waited)
                         time.sleep(chunk)
                         waited += chunk
-                
                 if self._stop_event.is_set():
                     break
-                
-                # 일시정지 체크
-                if self._paused:
-                    self._pause_event.wait()
-                    if self._stop_event.is_set():
-                        break
-                
                 self._apply_step(step)
-            
-            # 데모 완료
             self.current_step = None
-            self._current_step_index = 0
         finally:
             self._running = False
-            self._paused = False
             self._stop_event.clear()
-            self._pause_event.clear()
 
     def _apply_step(self, step: Dict[str, Any]) -> None:
         global game_state
@@ -796,40 +728,14 @@ def api_reset():
 
 @game_bp.route("/api/demo/start", methods=["POST"])
 def api_demo_start():
-    data = request.get_json(silent=True) or {}
-    resume = data.get("resume", False)
-    if demo_runner.start(resume=resume):
+    if demo_runner.start():
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": "demo_running"}), 409
 
 
-@game_bp.route("/api/demo/stop", methods=["POST"])
-def api_demo_stop():
-    demo_runner.stop()
-    return jsonify({"ok": True})
-
-
-@game_bp.route("/api/demo/pause", methods=["POST"])
-def api_demo_pause():
-    demo_runner.pause()
-    return jsonify({"ok": True})
-
-
-@game_bp.route("/api/demo/resume", methods=["POST"])
-def api_demo_resume():
-    if demo_runner.resume():
-        return jsonify({"ok": True})
-    return jsonify({"ok": False, "error": "not_paused"}), 409
-
-
 @game_bp.route("/api/demo/status")
 def api_demo_status():
-    return jsonify({
-        "ok": True,
-        "running": demo_runner.is_running,
-        "paused": demo_runner.is_paused,
-        "step": demo_runner.current_step
-    })
+    return jsonify({"ok": True, "running": demo_runner.is_running, "step": demo_runner.current_step})
 
 
 @game_bp.route("/api/config")
