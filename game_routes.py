@@ -12,7 +12,13 @@ from macros_executor import (
     run_macro_by_name_async,
 )
 from macros_executor import trigger_macro
-from config import BASEBALL_ID
+from config import BASEBALL_ID, RASPBERRY_PI_IP, RASPBERRY_PI_MP3_PORT
+
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
 
 
 game_bp = Blueprint("game", __name__)
@@ -151,6 +157,8 @@ DEMO_SCENARIO_STEPS = [
         "description": "삐끼삐끼 동작",
         "event_type": "info",
         "macro": "아웃(삐끼삐끼)",
+        "pause_demo": True,  # 삐끼삐끼 진행 중 시나리오 일시정지
+        "pause_duration": 8,  # 삐끼삐끼 매크로 예상 실행 시간 (초)
     },
     {
         "delay": 3,
@@ -260,6 +268,12 @@ DEMO_SCENARIO_STEPS = [
         "delay": 10,
         "description": "응원 종료",
         "event_type": "info",
+    },
+    {
+        "delay": 0,
+        "description": "기본 자세 복귀",
+        "event_type": "info",
+        "macro": "차렷자세",
     },
     {
         "delay": 2,
@@ -596,8 +610,33 @@ class DemoScenarioRunner:
                 }
             # 응원가, 휴식 등은 last_event를 업데이트하지 않음 (이전 경기 이벤트 유지)
 
+        # 삐끼삐끼 진행 중 시나리오 일시정지 처리
+        if step.get("pause_demo"):
+            pause_duration = float(step.get("pause_duration", 8))
+            self.pause()
+            print(f"⏸️ 데모 일시정지: {step.get('description', '')} ({pause_duration}초)")
+            time.sleep(pause_duration)
+            self.resume()
+            print(f"▶️ 데모 재개")
+
         macro_name = step.get("macro")
         if macro_name:
+            # MP3 파일 매핑
+            MP3_MAP = {
+                "홈런": "homerun.mp3",
+                "김도영 응원가": "kimdoyoung.mp3",
+                "김도영 응원가가": "kimdoyoung.mp3",  # DEMO_MACRO_MAP의 키와 일치
+                "김지찬 응원가": "kimjichan.mp3",
+                "아웃(삐끼삐끼)": "biggibiggi.mp3",
+                "외쳐라 최강기아": "best_kia.mp3",
+                "최강기아": "best_kia.mp3",  # DEMO_MACRO_MAP의 키와 일치
+            }
+            
+            # MP3 재생 (라즈베리파이로 전송)
+            mp3_file = MP3_MAP.get(macro_name)
+            if mp3_file:
+                _play_mp3_on_raspberry(mp3_file)
+            
             file_key, macro_key = DEMO_MACRO_MAP.get(macro_name, (None, None))
             if file_key and macro_key:
                 try:
@@ -613,6 +652,28 @@ class DemoScenarioRunner:
 
 
 demo_runner = DemoScenarioRunner()
+
+
+def _play_mp3_on_raspberry(mp3_filename: str) -> None:
+    """라즈베리파이에서 MP3 파일을 재생합니다"""
+    if not RASPBERRY_PI_IP:
+        print(f"⚠️ 라즈베리파이 IP가 설정되지 않아 MP3 재생을 건너뜁니다: {mp3_filename}")
+        return
+    
+    if not REQUESTS_AVAILABLE:
+        print(f"⚠️ requests 모듈이 없어 MP3 재생을 건너뜁니다: {mp3_filename}")
+        return
+    
+    try:
+        url = f"http://{RASPBERRY_PI_IP}:{RASPBERRY_PI_MP3_PORT}/play"
+        response = requests.post(url, json={"filename": mp3_filename}, timeout=2)
+        if response.status_code == 200:
+            print(f"🎵 MP3 재생 요청 전송: {mp3_filename}")
+        else:
+            print(f"⚠️ MP3 재생 요청 실패 ({response.status_code}): {mp3_filename}")
+    except Exception as e:
+        print(f"⚠️ MP3 재생 요청 중 오류: {e} (파일: {mp3_filename})")
+        # 오류가 있어도 데모는 계속 진행
 
 
 def _advance_random_event(state: Dict[str, Any]) -> None:
