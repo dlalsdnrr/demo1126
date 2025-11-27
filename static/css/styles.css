@@ -150,6 +150,22 @@ body {
   z-index: 6;
   text-shadow: 0 0 4px rgba(255, 200, 200, 0.8);
   display: none;
+  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* 팀별 주자 이름 색상 */
+.base-runner-name.team-red {
+  background: rgba(200, 0, 0, 0.9);
+  border: 1px solid rgba(255, 138, 138, 0.6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 12px rgba(255, 138, 138, 0.4);
+  text-shadow: 0 0 4px rgba(255, 200, 200, 0.8);
+}
+
+.base-runner-name.team-blue {
+  background: rgba(0, 100, 200, 0.9);
+  border: 1px solid rgba(138, 180, 255, 0.6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 12px rgba(138, 180, 255, 0.4);
+  text-shadow: 0 0 4px rgba(200, 220, 255, 0.8);
 }
 
 .base.occupied .base-runner-name {
@@ -223,8 +239,21 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 12px rgba(138, 180, 255, 0.4);
   transform: translate(-50%, -50%);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.3s ease, background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
   z-index: 10;
+}
+
+/* 팀별 수비수 색상 */
+.fielder.team-blue {
+  background: radial-gradient(circle at 40% 40%, #ffffff 0%, #d4eaff 100%);
+  border: 2px solid #8ab4ff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 12px rgba(138, 180, 255, 0.4);
+}
+
+.fielder.team-red {
+  background: radial-gradient(circle at 40% 40%, #ffffff 0%, #ffd4d4 100%);
+  border: 2px solid #ff8a8a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 12px rgba(255, 138, 138, 0.4);
 }
 
 .fielder.occupied {
@@ -244,8 +273,21 @@ body {
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6), 0 0 16px rgba(255, 138, 138, 0.5);
   transform: translate(-50%, -50%);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.3s ease, background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
   z-index: 11;
+}
+
+/* 팀별 타자 색상 */
+.batter.team-red {
+  background: radial-gradient(circle at 40% 40%, #ffffff 0%, #ffd4d4 100%);
+  border: 2px solid #ff8a8a;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6), 0 0 16px rgba(255, 138, 138, 0.5);
+}
+
+.batter.team-blue {
+  background: radial-gradient(circle at 40% 40%, #ffffff 0%, #d4eaff 100%);
+  border: 2px solid #8ab4ff;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6), 0 0 16px rgba(138, 180, 255, 0.5);
 }
 
 .batter.active {
@@ -286,6 +328,20 @@ body {
   border: 1px solid rgba(138, 180, 255, 0.5);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   z-index: 12;
+  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* 팀별 수비수 이름 색상 */
+.fielder-name.team-blue {
+  background: rgba(0, 100, 200, 0.9);
+  border: 1px solid rgba(138, 180, 255, 0.5);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.fielder-name.team-red {
+  background: rgba(200, 0, 0, 0.9);
+  border: 1px solid rgba(255, 138, 138, 0.6);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 /* 포수 이름은 위에 표시 */
@@ -311,6 +367,22 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 12px rgba(255, 138, 138, 0.4);
   z-index: 13;
   text-shadow: 0 0 4px rgba(255, 200, 200, 0.8);
+  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* 팀별 타자 이름 색상 */
+.batter-name.team-red {
+  background: rgba(200, 0, 0, 0.9);
+  border: 1px solid rgba(255, 138, 138, 0.6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 12px rgba(255, 138, 138, 0.4);
+  text-shadow: 0 0 4px rgba(255, 200, 200, 0.8);
+}
+
+.batter-name.team-blue {
+  background: rgba(0, 100, 200, 0.9);
+  border: 1px solid rgba(138, 180, 255, 0.6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 12px rgba(138, 180, 255, 0.4);
+  text-shadow: 0 0 4px rgba(200, 220, 255, 0.8);
 }
 
 /* 중앙 팝업 */

@@ -146,6 +146,50 @@
           }
       }
   }
+  
+  function updateTeamColors(teams, half) {
+      // half가 'T'면 away팀이 공격, 'B'면 home팀이 공격
+      const battingTeam = half === 'T' ? teams.away.name : teams.home.name;
+      const fieldingTeam = half === 'T' ? teams.home.name : teams.away.name;
+      
+      // 삼성 = 파란색, 기아 = 빨간색
+      const battingColor = (battingTeam === '삼성') ? 'blue' : 'red';
+      const fieldingColor = (fieldingTeam === '삼성') ? 'blue' : 'red';
+      
+      // 타자 색상 업데이트
+      if (el.batter) {
+          el.batter.classList.remove('team-red', 'team-blue');
+          el.batter.classList.add(`team-${battingColor}`);
+      }
+      if (el.batterName) {
+          el.batterName.classList.remove('team-red', 'team-blue');
+          el.batterName.classList.add(`team-${battingColor}`);
+      }
+      
+      // 주자 색상 업데이트
+      el.runnerNames.forEach(runnerNameEl => {
+          if (runnerNameEl) {
+              runnerNameEl.classList.remove('team-red', 'team-blue');
+              runnerNameEl.classList.add(`team-${battingColor}`);
+          }
+      });
+      
+      // 수비수 색상 업데이트
+      Object.values(el.fielders).forEach(fielderEl => {
+          if (fielderEl) {
+              fielderEl.classList.remove('team-red', 'team-blue');
+              fielderEl.classList.add(`team-${fieldingColor}`);
+          }
+      });
+      
+      // 수비수 이름 색상 업데이트
+      Object.values(el.fielderNames).forEach(fielderNameEl => {
+          if (fielderNameEl) {
+              fielderNameEl.classList.remove('team-red', 'team-blue');
+              fielderNameEl.classList.add(`team-${fieldingColor}`);
+          }
+      });
+  }
 
   const NON_GAME_POPUP_TYPES = new Set(['info', 'chant']);
   
@@ -261,6 +305,9 @@
       updateBases(bases, state);
       updateFielders(fielders);
       updateBatter(batter);
+      
+      // 팀별 색상 업데이트 (삼성=파란색, 기아=빨간색)
+      updateTeamColors(teams, half);
 
       // 플레이 텍스트 업데이트 및 팝업 표시
       const currentPlayText = last_event?.description ?? '';
@@ -407,6 +454,18 @@
       if (!btn || demoRunning) return;
       btn.disabled = true;
       updateDemoCaption('데모 준비 중...');
+      // 데모 시작 시 우승 팝업 관련 상태 리셋 (다시 팝업이 뜰 수 있도록)
+      victoryPopupDismissed = false;
+      lastPopupText = '';
+      // 팝업 오버레이도 닫힌 상태로 리셋
+      const overlay = document.getElementById('popup-overlay');
+      if (overlay) {
+          overlay.classList.remove('show', 'victory');
+          const stage = document.querySelector('.stage');
+          if (stage) {
+              stage.classList.remove('victory-mode');
+          }
+      }
       try {
           const res = await fetch('/api/demo/start', { method: 'POST' });
           if (!res.ok) {
