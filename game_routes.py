@@ -3,6 +3,9 @@ from __future__ import annotations
 import random
 import threading
 import time
+import os
+import subprocess
+import platform
 from typing import Dict, Any, Optional
 
 from flask import Blueprint, jsonify, render_template, request
@@ -12,13 +15,7 @@ from macros_executor import (
     run_macro_by_name_async,
 )
 from macros_executor import trigger_macro
-from config import BASEBALL_ID, RASPBERRY_PI_IP, RASPBERRY_PI_MP3_PORT
-
-try:
-    import requests
-    REQUESTS_AVAILABLE = True
-except ImportError:
-    REQUESTS_AVAILABLE = False
+from config import BASEBALL_ID, RASPBERRY_PI_IP, RASPBERRY_PI_MP3_PORT, I2C_MODE
 
 
 game_bp = Blueprint("game", __name__)
@@ -654,26 +651,62 @@ class DemoScenarioRunner:
 demo_runner = DemoScenarioRunner()
 
 
+def _is_raspberry_pi() -> bool:
+    """라즈베리파이에서 실행 중인지 확인"""
+    # I2C_MODE가 auto이고 Linux 환경이면 라즈베리파이로 간주
+    if I2C_MODE == "auto" and platform.system() == "Linux":
+        # 추가 확인: /proc/cpuinfo에 Raspberry Pi 정보가 있는지 확인
+        try:
+            with open("/proc/cpuinfo", "r") as f:
+                cpuinfo = f.read()
+                if "Raspberry Pi" in cpuinfo or "BCM" in cpuinfo:
+                    return True
+        except:
+            pass
+    return False
+
+
 def _play_mp3_on_raspberry(mp3_filename: str) -> None:
     """라즈베리파이에서 MP3 파일을 재생합니다"""
-    if not RASPBERRY_PI_IP:
-        print(f"⚠️ 라즈베리파이 IP가 설정되지 않아 MP3 재생을 건너뜁니다: {mp3_filename}")
-        return
+    is_rpi = _is_raspberry_pi()
     
-    if not REQUESTS_AVAILABLE:
-        print(f"⚠️ requests 모듈이 없어 MP3 재생을 건너뜁니다: {mp3_filename}")
-        return
-    
-    try:
-        url = f"http://{RASPBERRY_PI_IP}:{RASPBERRY_PI_MP3_PORT}/play"
-        response = requests.post(url, json={"filename": mp3_filename}, timeout=2)
-        if response.status_code == 200:
-            print(f"🎵 MP3 재생 요청 전송: {mp3_filename}")
-        else:
-            print(f"⚠️ MP3 재생 요청 실패 ({response.status_code}): {mp3_filename}")
-    except Exception as e:
-        print(f"⚠️ MP3 재생 요청 중 오류: {e} (파일: {mp3_filename})")
-        # 오류가 있어도 데모는 계속 진행
+    if is_rpi:
+        # 라즈베리파이에서 직접 재생
+        mp3_path = f"/home/raspberry/{mp3_filename}"
+        
+        if not os.path.exists(mp3_path):
+            print(f"⚠️ MP3 파일 없음: {mp3_path}")
+            return
+        
+        try:
+            # 기존 재생 중인 mpg123 프로세스 종료
+            subprocess.call(["pkill", "-f", "mpg123"], stderr=subprocess.DEVNULL)
+            
+            # MP3 재생 (비동기)
+            print(f"🎧 MP3 재생 시작: {mp3_filename}")
+            subprocess.Popen(
+                ["mpg123", "-a", "hw:0,0", mp3_path],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        except Exception as e:
+            print(f"⚠️ MP3 재생 실패: {e} (파일: {mp3_filename})")
+    elif RASPBERRY_PI_IP:
+        # PC에서 라즈베리파이로 HTTP 요청
+        try:
+            import requests
+            url = f"http://{RASPBERRY_PI_IP}:{RASPBERRY_PI_MP3_PORT}/play"
+            response = requests.post(url, json={"filename": mp3_filename}, timeout=2)
+            if response.status_code == 200:
+                print(f"🎵 MP3 재생 요청 전송: {mp3_filename}")
+            else:
+                print(f"⚠️ MP3 재생 요청 실패 ({response.status_code}): {mp3_filename}")
+        except ImportError:
+            print(f"⚠️ requests 모듈이 없어 MP3 재생을 건너뜁니다: {mp3_filename}")
+        except Exception as e:
+            print(f"⚠️ MP3 재생 요청 중 오류: {e} (파일: {mp3_filename})")
+    else:
+        print(f"⚠️ 라즈베리파이 환경이 아니고 IP도 설정되지 않아 MP3 재생을 건너뜁니다: {mp3_filename}")
 
 
 def _advance_random_event(state: Dict[str, Any]) -> None:
