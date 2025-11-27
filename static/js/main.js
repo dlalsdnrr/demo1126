@@ -189,12 +189,25 @@
               fielderNameEl.classList.add(`team-${fieldingColor}`);
           }
       });
+      
+      // 팀명 색상 업데이트 (왼쪽 위 메뉴)
+      const awayTeamColor = (teams.away.name === '삼성') ? 'blue' : 'red';
+      const homeTeamColor = (teams.home.name === '삼성') ? 'blue' : 'red';
+      
+      if (el.nameAway) {
+          el.nameAway.classList.remove('team-red', 'team-blue');
+          el.nameAway.classList.add(`team-${awayTeamColor}`);
+      }
+      if (el.nameHome) {
+          el.nameHome.classList.remove('team-red', 'team-blue');
+          el.nameHome.classList.add(`team-${homeTeamColor}`);
+      }
   }
 
   const NON_GAME_POPUP_TYPES = new Set(['info', 'chant']);
   
   // 경기 플레이 이벤트만 팝업 표시 (경기 내용 관련)
-  const GAME_PLAY_EVENTS = new Set(['start', 'strikeout', 'hr', 'single', 'double', 'triple', 'out', 'sac_fly', 'walk', 'error', 'live', 'change']);
+  const GAME_PLAY_EVENTS = new Set(['start', 'strikeout', 'hr', 'single', 'double', 'triple', 'out', 'sac_fly', 'walk', 'error', 'live', 'change', 'ball', 'strike']);
 
   function isGameEvent(event) {
       if (!event || !event.type) return false;
