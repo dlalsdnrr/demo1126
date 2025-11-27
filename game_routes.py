@@ -17,6 +17,25 @@ from macros_executor import (
 from macros_executor import trigger_macro, calculate_macro_duration
 from config import BASEBALL_ID, RASPBERRY_PI_IP, RASPBERRY_PI_MP3_PORT, I2C_MODE
 
+# SPI 통신 (라즈베리파이에서만 사용)
+SPI_AVAILABLE = False
+spi = None
+try:
+    if platform.system() == "Linux":
+        try:
+            import spidev  # type: ignore
+            spi = spidev.SpiDev()
+            spi.open(0, 0)
+            spi.max_speed_hz = 500000
+            SPI_AVAILABLE = True
+            print("✓ SPI 통신 초기화 완료")
+        except ImportError:
+            print("⚠️ spidev 모듈이 설치되지 않았습니다 (라즈베리파이에서만 필요)")
+            SPI_AVAILABLE = False
+except Exception as e:
+    print(f"⚠️ SPI 통신 초기화 실패: {e}")
+    SPI_AVAILABLE = False
+
 
 game_bp = Blueprint("game", __name__)
 
@@ -212,6 +231,8 @@ class DemoScenarioRunner:
         self._pause_event.set()  # 초기에는 일시정지 해제 상태
         self.current_step: Optional[str] = None
         self._step_index = 0  # 현재 진행 중인 스텝 인덱스
+        self._macro_running = False  # 매크로 실행 중 플래그
+        self._macro_lock = threading.Lock()  # 매크로 실행 상태 보호
 
     @property
     def is_running(self) -> bool:
@@ -238,6 +259,19 @@ class DemoScenarioRunner:
             return False
         self._paused = True
         self._pause_event.clear()  # 일시정지
+        
+        # 매크로 실행 중이면 차렷자세로 복귀
+        with self._macro_lock:
+            if self._macro_running:
+                print("⏸️ 데모 일시정지: 매크로 실행 중이므로 차렷자세로 복귀")
+                # 아두이노에 STOP 명령 전송 (바퀴 멈춤)
+                _send_spi_command("STOP")
+                # 차렷자세 매크로 실행
+                file_key, macro_key = DEMO_MACRO_MAP.get("차렷자세", (None, None))
+                if file_key and macro_key:
+                    trigger_macro(file_key, macro_key)
+                    print("✓ 차렷자세로 복귀")
+        
         return True
 
     def resume(self) -> bool:
@@ -279,10 +313,14 @@ class DemoScenarioRunner:
                     waited = 0.0
                     while waited < delay and not self._stop_event.is_set():
                         # 일시정지 중이면 대기
-                        self._pause_event.wait()
+                        if self._paused:
+                            self._pause_event.wait()  # 일시정지 해제까지 대기
+                            if self._stop_event.is_set():
+                                break
+                            continue  # 일시정지 해제 후 다시 체크
                         if self._stop_event.is_set():
                             break
-                        chunk = min(0.5, delay - waited)
+                        chunk = min(0.1, delay - waited)
                         time.sleep(chunk)
                         waited += chunk
                 
@@ -413,6 +451,12 @@ class DemoScenarioRunner:
                         # MP3 재생 시작 후 약간의 딜레이 (MP3와 동작 싱크 맞추기)
                         time.sleep(0.3)
                     
+                    # 아두이노로 SPI 명령 전송 (바퀴 움직임)
+                    arduino_cmd = ARDUINO_COMMAND_MAP.get(macro_name)
+                    if arduino_cmd:
+                        _send_spi_command(arduino_cmd)
+                        print(f"🎮 아두이노 명령 전송: {arduino_cmd}")
+                    
                     # 매크로 실행 (비동기)
                     success = trigger_macro(file_key, macro_key)
                     if not success:
@@ -421,12 +465,48 @@ class DemoScenarioRunner:
                     else:
                         # 매크로 실행 중 시나리오 일시정지 (내부적으로만 처리, 사용자 일시정지와 구분)
                         if macro_duration > 0:
-                            # _paused는 변경하지 않고 _pause_event만 제어 (사용자 일시정지와 구분)
-                            self._pause_event.clear()
+                            # 매크로 실행 중 플래그 설정
+                            with self._macro_lock:
+                                self._macro_running = True
+                            
+                            # 매크로 실행 중에는 _pause_event를 clear하지 않음 (사용자 일시정지와 구분)
                             print(f"⏸️ 매크로 실행 중: {step.get('description', '')} ({macro_duration:.1f}초)")
-                            time.sleep(macro_duration)
-                            self._pause_event.set()
-                            print(f"▶️ 매크로 완료, 시나리오 재개")
+                            
+                            # 매크로 실행 시간 동안 대기 (일시정지 감지)
+                            waited = 0.0
+                            chunk = 0.1  # 0.1초씩 체크
+                            while waited < macro_duration and not self._stop_event.is_set():
+                                # 사용자가 일시정지했는지 확인
+                                if self._paused:
+                                    print("⏸️ 사용자 일시정지 감지, 매크로 대기 중단")
+                                    # 일시정지 해제까지 대기
+                                    self._pause_event.wait()
+                                    if self._stop_event.is_set():
+                                        break
+                                    # 일시정지 해제 후에도 매크로 대기 중단 (차렷자세로 복귀했으므로)
+                                    break
+                                time.sleep(chunk)
+                                waited += chunk
+                            
+                            # 매크로 실행 완료
+                            with self._macro_lock:
+                                self._macro_running = False
+                            
+                            # 동작 간 텀 추가 (1.5초) - 일시정지 상태 체크
+                            if not self._paused and not self._stop_event.is_set():
+                                print(f"⏳ 동작 간 텀: 1.5초")
+                                waited = 0.0
+                                while waited < 1.5 and not self._stop_event.is_set():
+                                    if self._paused:
+                                        self._pause_event.wait()
+                                        if self._stop_event.is_set():
+                                            break
+                                        continue
+                                    chunk = min(0.1, 1.5 - waited)
+                                    time.sleep(chunk)
+                                    waited += chunk
+                            
+                            print(f"▶️ 매크로 완료")
                 except Exception as e:
                     print(f"✗ 데모 매크로 '{file_key}:{macro_key}' 실행 중 예외 발생: {type(e).__name__}: {e}")
             else:
@@ -450,6 +530,29 @@ def _is_raspberry_pi() -> bool:
         except:
             pass
     return False
+
+
+def _send_spi_command(command: str) -> None:
+    """아두이노로 SPI 명령 전송"""
+    if not SPI_AVAILABLE or spi is None:
+        return
+    
+    try:
+        packet = command.strip() + "\n"
+        spi.xfer2([ord(c) for c in packet])
+        print(f"[SPI] → Arduino: {command}")
+    except Exception as e:
+        print(f"⚠️ SPI 전송 실패: {e}")
+
+
+# 매크로 이름을 아두이노 SPI 명령어로 매핑
+ARDUINO_COMMAND_MAP = {
+    "김지찬 응원가": "KIM_JICHAN",
+    "홈런": "HOMERUN",
+    "김도영 응원가가": "KIM_DOYOUNG",
+    "김도영 응원가": "KIM_DOYOUNG",  # 별칭
+    "아웃(삐끼삐끼)": "KIAOUT",
+}
 
 
 def _play_mp3_on_raspberry(mp3_filename: str) -> None:

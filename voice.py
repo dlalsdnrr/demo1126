@@ -231,16 +231,78 @@ def speak_edge_tts(text: str) -> Optional[str]:
         print(f"✗ edge-tts 실패: {e}")
         return None
 
-def get_tts_audio(text: str) -> Optional[str]:
+def amplify_audio_volume(audio_base64: str, volume_multiplier: float = 2.0) -> Optional[str]:
+    """ffmpeg를 사용하여 오디오 볼륨을 증폭시킵니다"""
+    if not FFMPEG_AVAILABLE:
+        return audio_base64  # ffmpeg 없으면 원본 반환
+    
+    try:
+        # base64 디코딩
+        audio_bytes = base64.b64decode(audio_base64)
+        
+        # 입력 임시 파일
+        input_file = None
+        output_file = None
+        
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+                f.write(audio_bytes)
+                input_file = f.name
+            
+            # 출력 임시 파일
+            output_file = tempfile.mktemp(suffix=".mp3")
+            
+            # ffmpeg로 볼륨 증폭 (volume 필터 사용)
+            cmd = [
+                FFMPEG_PATH,
+                "-i", input_file,
+                "-af", f"volume={volume_multiplier}",  # 볼륨 증폭 (예: 2.0 = 2배)
+                "-y",  # 덮어쓰기
+                output_file
+            ]
+            
+            subprocess.run(
+                cmd,
+                capture_output=True,
+                check=True
+            )
+            
+            # 출력 파일 읽기
+            with open(output_file, "rb") as f:
+                amplified_audio = f.read()
+                return base64.b64encode(amplified_audio).decode('utf-8')
+                
+        finally:
+            # 임시 파일 정리
+            if input_file and os.path.exists(input_file):
+                try:
+                    os.remove(input_file)
+                except:
+                    pass
+            if output_file and os.path.exists(output_file):
+                try:
+                    os.remove(output_file)
+                except:
+                    pass
+                    
+    except Exception as e:
+        print(f"⚠️ 볼륨 증폭 실패: {e}, 원본 오디오 반환")
+        return audio_base64  # 실패 시 원본 반환
+
+def get_tts_audio(text: str, amplify_volume: bool = True) -> Optional[str]:
     """TTS 오디오 생성 (edge-tts 우선, 실패 시 gTTS)"""
     # 1순위: edge-tts
     result = speak_edge_tts(text)
     if result:
+        if amplify_volume:
+            result = amplify_audio_volume(result, volume_multiplier=2.0)
         return result
     
     # 2순위: gTTS
     result = speak_gtts(text)
     if result:
+        if amplify_volume:
+            result = amplify_audio_volume(result, volume_multiplier=2.0)
         return result
     
     print("✗ 모든 TTS 엔진 실패")
@@ -510,7 +572,6 @@ class VoiceAssistant:
                         "keywords": ["안녕", "hello", "헬로"],
                         "file": "hello",
                         "macro": "안녕",
-                        "display": "안녕이라고 말씀하셨어요",
                         "reply": "안녕",
                         "popup": "안녕",
                     },
@@ -518,7 +579,6 @@ class VoiceAssistant:
                         "keywords": ["하이파이브", "하이파이브해", "하이파이브해줘", "hi5", "highfive", "하이파이", "하이파", "파이브", "하이", "파이", "파이브해", "파이브해줘", "하이파이브요", "하이파이브해요", "하이파이브해주세요", "하이파이브해줄래", "하이파이브해줄게", "하이파이브해줄까", "하이파이브해줄래요", "하이파이브해줄게요", "하이파이브해줄까요"],
                         "file": "hifive",
                         "macro": "하이파이브",
-                        "display": "하이파이브 요청 감지",
                         "reply": "하이파이브",
                         "popup": "하이파이브",
                     },
@@ -526,7 +586,6 @@ class VoiceAssistant:
                         "keywords": ["파이팅", "화이팅", "파이팅해", "파이팅해줘", "파잇팅", "힘내", "힘내줘", "힘내요", "파이팅요", "화이팅요", "파이팅해요", "화이팅해요", "파이팅해주세요", "화이팅해주세요", "파이팅해줄래", "화이팅해줄래", "파이팅해줄게", "화이팅해줄게", "파이팅해줄까", "화이팅해줄까", "파이팅해줄래요", "화이팅해줄래요", "파이팅해줄게요", "화이팅해줄게요", "파이팅해줄까요", "화이팅해줄까요", "파이팅이", "화이팅이", "파이팅해봐", "화이팅해봐", "파이팅해봐요", "화이팅해봐요", "파이팅하자", "화이팅하자", "파이팅하자요", "화이팅하자요"],
                         "file": "fighting",
                         "macro": "파이팅",
-                        "display": "파이팅 요청 감지",
                         "reply": "파이팅",
                         "popup": "파이팅",
                     },
@@ -535,7 +594,8 @@ class VoiceAssistant:
                 for trig in custom_triggers:
                     if any(key in normalized_text for key in trig["keywords"]):
                         handled_custom = True
-                        display_text = trig["display"]
+                        # 사용자 입력도 단순하게 표시 (안녕, 하이파이브, 파이팅)
+                        display_text = trig["reply"]
                         triggered = trigger_macro(trig["file"], trig["macro"])
                         if not triggered:
                             print(f"⚠️ 매크로 실행 실패 또는 미정의: {trig['file']}::{trig['macro']}")
