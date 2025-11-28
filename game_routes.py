@@ -12,12 +12,72 @@ from flask import Blueprint, jsonify, render_template, request
 from macros_executor import (
     run_macro_by_event_text_async,
     last_event_to_trigger_text,
-    run_macro_by_name_async,
+    trigger_macro,
+    calculate_macro_duration,
 )
-from macros_executor import trigger_macro, calculate_macro_duration
 from config import BASEBALL_ID, RASPBERRY_PI_IP, RASPBERRY_PI_MP3_PORT, I2C_MODE
 
-# SPI 통신 (라즈베리파이에서만 사용)
+# ============================================================================
+# 상수 정의
+# ============================================================================
+
+# 매크로 파일 매핑 (매크로 이름 -> (파일키, 매크로키))
+DEMO_MACRO_MAP = {
+    "차렷자세": ("차렷자세", "차렷자세"),
+    "김지찬 응원가": ("김지찬 응원가", "김지찬 응원가"),
+    "아웃(삐끼삐끼)": ("아웃(삐끼삐끼)", "아웃(삐끼삐끼)"),
+    "김도영 응원가": ("김도영 응원가", "김도영 응원가"),
+    "홈런": ("홈런", "홈런"),
+    "최강기아": ("외쳐라 최강기아", "최강기아"),
+}
+
+# MP3 파일 매핑
+MP3_MAP = {
+    "홈런": "homerun.mp3",
+    "김도영 응원가": "kimdoyoung.mp3",
+    "김지찬 응원가": "kimjichan.mp3",
+    "아웃(삐끼삐끼)": "biggibiggi.mp3",
+    "외쳐라 최강기아": "best_kia.mp3",
+    "최강기아": "best_kia.mp3",
+}
+
+# 아두이노 SPI 명령 매핑
+ARDUINO_COMMAND_MAP = {
+    "김지찬 응원가": "KIM_JICHAN",
+    "홈런": "HOMERUN",
+    "김도영 응원가": "KIM_DOYOUNG",
+    "아웃(삐끼삐끼)": "OUT",
+}
+
+# MP3 재생 전 딜레이 설정 (초 단위) - 동작과 소리 싱크 맞추기
+MP3_PRE_DELAY_MAP = {
+    # 최강기아는 딜레이 없이 잘 맞으므로 김지찬도 동일하게 설정
+}
+
+# MP3 재생 후 딜레이 설정 (초 단위)
+MP3_DELAY_MAP = {
+    "김지찬 응원가": 0.3,  # 최강기아와 동일한 기본 딜레이로 설정
+    "김도영 응원가": 1.0,
+    "홈런": 1.8,
+    "아웃(삐끼삐끼)": 1.3,
+}
+
+# 기본 MP3 딜레이
+DEFAULT_MP3_DELAY = 0.3
+
+# 경기 관련 이벤트 타입 (UI에 표시되는 이벤트)
+GAME_RELATED_EVENTS = {
+    "start", "live", "strikeout", "hr", "single", "double", "triple",
+    "out", "sac_fly", "walk", "error", "change", "end", "ball", "strike"
+}
+
+# 매크로 실행 후 동작 간 텀 (초)
+MACRO_INTERVAL = 1.5
+
+# ============================================================================
+# SPI 통신 초기화
+# ============================================================================
+
 SPI_AVAILABLE = False
 spi = None
 try:
@@ -36,13 +96,20 @@ except Exception as e:
     print(f"⚠️ SPI 통신 초기화 실패: {e}")
     SPI_AVAILABLE = False
 
+# ============================================================================
+# Flask Blueprint 및 전역 변수
+# ============================================================================
 
 game_bp = Blueprint("game", __name__)
-
 lock = threading.Lock()
+game_state: Dict[str, Any] = {}
 
+# ============================================================================
+# 게임 상태 관리
+# ============================================================================
 
 def _initial_game_state() -> Dict[str, Any]:
+    """초기 게임 상태를 반환합니다."""
     return {
         "teams": {
             "away": {"name": "AWAY", "runs": 0, "hits": 0, "errors": 0},
@@ -68,19 +135,9 @@ def _initial_game_state() -> Dict[str, Any]:
         "last_event": {"type": "start", "description": "경기 시작"},
     }
 
-
-game_state: Dict[str, Any] = _initial_game_state()
-
-
-DEMO_MACRO_MAP = {
-    "차렷자세": ("차렷자세", "차렷자세"),  # hold.json
-    "김지찬 응원가": ("김지찬 응원가", "김지찬 응원가"),  # kimjichan.json
-    "아웃(삐끼삐끼)": ("아웃(삐끼삐끼)", "아웃(삐끼삐끼)"),  # out.json
-    "김도영 응원가가": ("김도영 응원가", "김도영 응원가"),  # kimdoyoung.json
-    "홈런": ("홈런", "홈런"),  # homerun.json
-    "최강기아": ("외쳐라 최강기아", "최강기아"),  # kia.json
-}
-
+# ============================================================================
+# 데모 시나리오 정의
+# ============================================================================
 
 DEMO_SCENARIO_STEPS = [
     {
@@ -177,11 +234,17 @@ DEMO_SCENARIO_STEPS = [
         "delay": 0,
         "description": "김도영 응원가",
         "event_type": "chant",
-        "macro": "김도영 응원가가",
+        "macro": "김도영 응원가",
         "batter": {"name": "김도영", "active": True},
     },
     {
-        "delay": 2,
+        "delay": 0,
+        "description": "기본 자세 복귀",
+        "event_type": "info",
+        "macro": "차렷자세",
+    },
+    {
+        "delay": 0,
         "description": "김도영 좌중월 솔로 홈런!",
         "event_type": "hr",
         "score_delta": {"home": 1},
@@ -220,330 +283,25 @@ DEMO_SCENARIO_STEPS = [
     },
 ]
 
-
-class DemoScenarioRunner:
-    def __init__(self) -> None:
-        self._thread: Optional[threading.Thread] = None
-        self._running = False
-        self._paused = False  # 사용자가 일시정지한 경우만 True
-        self._stop_event = threading.Event()
-        self._pause_event = threading.Event()
-        self._pause_event.set()  # 초기에는 일시정지 해제 상태
-        self.current_step: Optional[str] = None
-        self._step_index = 0  # 현재 진행 중인 스텝 인덱스
-        self._macro_running = False  # 매크로 실행 중 플래그
-        self._macro_lock = threading.Lock()  # 매크로 실행 상태 보호
-
-    @property
-    def is_running(self) -> bool:
-        return self._running
-
-    @property
-    def is_paused(self) -> bool:
-        return self._paused
-
-    def start(self) -> bool:
-        if self._running:
-            return False
-        self._stop_event.clear()
-        self._pause_event.set()  # 시작 시 일시정지 해제
-        self._paused = False
-        self._step_index = 0
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
-        self._running = True
-        return True
-
-    def pause(self) -> bool:
-        if not self._running or self._paused:
-            return False
-        self._paused = True
-        self._pause_event.clear()  # 일시정지
-        
-        # 매크로 실행 중이면 차렷자세로 복귀
-        with self._macro_lock:
-            if self._macro_running:
-                print("⏸️ 데모 일시정지: 매크로 실행 중이므로 차렷자세로 복귀")
-                # 아두이노에 STOP 명령 전송 (바퀴 멈춤)
-                _send_spi_command("STOP")
-                # 차렷자세 매크로 실행
-                file_key, macro_key = DEMO_MACRO_MAP.get("차렷자세", (None, None))
-                if file_key and macro_key:
-                    trigger_macro(file_key, macro_key)
-                    print("✓ 차렷자세로 복귀")
-        
-        return True
-
-    def resume(self) -> bool:
-        if not self._running or not self._paused:
-            return False
-        self._paused = False
-        self._pause_event.set()  # 재개
-        return True
-
-    def stop(self) -> None:
-        if not self._running:
-            return
-        self._stop_event.set()
-        self._pause_event.set()  # 정지 시 일시정지 해제
-        if self._thread:
-            self._thread.join(timeout=1)
-
-    def _run(self) -> None:
-        global game_state
-        try:
-            with lock:
-                game_state = _initial_game_state()
-                game_state["teams"]["home"]["name"] = "기아"
-                game_state["teams"]["away"]["name"] = "삼성"
-            for idx, step in enumerate(DEMO_SCENARIO_STEPS):
-                if self._stop_event.is_set():
-                    break
-                self._step_index = idx
-                self.current_step = step.get("description")
-                
-                # 일시정지 대기
-                self._pause_event.wait()
-                
-                if self._stop_event.is_set():
-                    break
-                
-                delay = float(step.get("delay", 0))
-                if delay > 0:
-                    waited = 0.0
-                    while waited < delay and not self._stop_event.is_set():
-                        # 일시정지 중이면 대기
-                        if self._paused:
-                            self._pause_event.wait()  # 일시정지 해제까지 대기
-                            if self._stop_event.is_set():
-                                break
-                            continue  # 일시정지 해제 후 다시 체크
-                        if self._stop_event.is_set():
-                            break
-                        chunk = min(0.1, delay - waited)
-                        time.sleep(chunk)
-                        waited += chunk
-                
-                if self._stop_event.is_set():
-                    break
-                
-                # 일시정지 대기
-                self._pause_event.wait()
-                
-                if self._stop_event.is_set():
-                    break
-                
-                self._apply_step(step)
-            self.current_step = None
-            self._step_index = 0
-        finally:
-            self._running = False
-            self._paused = False
-            self._stop_event.clear()
-            self._pause_event.set()
-
-    def _apply_step(self, step: Dict[str, Any]) -> None:
-        global game_state
-        with lock:
-            state = game_state
-            teams = state["teams"]
-
-            team_names = step.get("set_teams")
-            if team_names:
-                if "home" in team_names:
-                    teams["home"]["name"] = team_names["home"]
-                if "away" in team_names:
-                    teams["away"]["name"] = team_names["away"]
-
-            if "set_scores" in step:
-                for side, value in step["set_scores"].items():
-                    if side in teams:
-                        teams[side]["runs"] = max(0, int(value))
-
-            if "set_hits" in step:
-                for side, value in step["set_hits"].items():
-                    if side in teams:
-                        teams[side]["hits"] = max(0, int(value))
-
-            if "set_errors" in step:
-                for side, value in step["set_errors"].items():
-                    if side in teams:
-                        teams[side]["errors"] = max(0, int(value))
-
-            if "score_delta" in step:
-                for side, delta in step["score_delta"].items():
-                    if side in teams:
-                        teams[side]["runs"] = max(0, teams[side]["runs"] + int(delta))
-
-            if "hits_delta" in step:
-                for side, delta in step["hits_delta"].items():
-                    if side in teams:
-                        teams[side]["hits"] = max(0, teams[side]["hits"] + int(delta))
-
-            if "errors_delta" in step:
-                for side, delta in step["errors_delta"].items():
-                    if side in teams:
-                        teams[side]["errors"] = max(0, teams[side]["errors"] + int(delta))
-
-            if "inning" in step:
-                state["inning"] = int(step["inning"])
-
-            if "half" in step:
-                state["half"] = step["half"]
-
-            if "count" in step:
-                state["count"].update(step["count"])
-
-            if "bases" in step:
-                state["bases"].update(step["bases"])
-                # runners 정보도 함께 업데이트 (선택적)
-                if "runners" in step:
-                    if "runners" not in state:
-                        state["runners"] = {"first": "", "second": "", "third": ""}
-                    state["runners"].update(step["runners"])
-
-            if "batter" in step:
-                if "batter" not in state:
-                    state["batter"] = {"name": "", "active": False}
-                state["batter"].update(step["batter"])
-
-            if "fielders" in step:
-                state["fielders"].update(step["fielders"])
-
-            # 경기 관련 이벤트만 last_event 업데이트 (UI에 표시)
-            # 응원가(chant), 휴식(info), 삐끼삐끼(info), 기본 자세 복귀(info), 홈런 동작(info) 등은 내부 처리만 하고 UI에 표시 안 함
-            event_type = step.get("event_type", "live")
-            GAME_RELATED_EVENTS = {"start", "live", "strikeout", "hr", "single", "double", "triple", "out", "sac_fly", "walk", "error", "change", "end", "ball", "strike"}
-            
-            if event_type in GAME_RELATED_EVENTS:
-                # popup_description이 명시적으로 있으면 사용, 없으면 None
-                popup_desc = step.get("popup_description")
-                state["last_event"] = {
-                    "type": event_type,
-                    "description": step.get("description", ""),
-                    "popup_description": popup_desc if popup_desc is not None else None,
-                }
-            # 응원가, 휴식 등은 last_event를 업데이트하지 않음 (이전 경기 이벤트 유지)
-
-        macro_name = step.get("macro")
-        if macro_name:
-            # MP3 파일 매핑
-            MP3_MAP = {
-                "홈런": "homerun.mp3",
-                "김도영 응원가": "kimdoyoung.mp3",
-                "김도영 응원가가": "kimdoyoung.mp3",  # DEMO_MACRO_MAP의 키와 일치
-                "김지찬 응원가": "kimjichan.mp3",
-                "아웃(삐끼삐끼)": "biggibiggi.mp3",
-                "외쳐라 최강기아": "best_kia.mp3",
-                "최강기아": "best_kia.mp3",  # DEMO_MACRO_MAP의 키와 일치
-            }
-            
-            file_key, macro_key = DEMO_MACRO_MAP.get(macro_name, (None, None))
-            if file_key and macro_key:
-                try:
-                    # 매크로 실행 시간 계산
-                    macro_duration = calculate_macro_duration(file_key, macro_key)
-                    
-                    # MP3 재생 (매크로 시작 전에 재생 시작)
-                    mp3_file = MP3_MAP.get(macro_name)
-                    if mp3_file:
-                        # 김지찬 응원가만 2초 딜레이 추가
-                        if macro_name == "김지찬 응원가":
-                            print("⏳ 김지찬 응원가 MP3 재생 2초 딜레이...")
-                            time.sleep(2.0)
-                        _play_mp3_on_raspberry(mp3_file)
-                        # MP3 재생 시작 후 딜레이 (MP3와 동작 싱크 맞추기)
-                        # 김도영 응원가의 경우 1.0초, 홈런의 경우 1.8초로 조정
-                        if macro_name == "김도영 응원가" or macro_name == "김도영 응원가가":
-                            time.sleep(1.0)  # 김도영 응원가 MP3와 동작 타이밍 맞추기
-                        elif macro_name == "홈런":
-                            time.sleep(1.8)  # 홈런 MP3와 동작 타이밍 맞추기
-                        else:
-                            time.sleep(0.3)  # 기타 매크로는 기본 딜레이
-                    
-                    # 아두이노로 SPI 명령 전송 (바퀴 움직임)
-                    arduino_cmd = ARDUINO_COMMAND_MAP.get(macro_name)
-                    if arduino_cmd:
-                        _send_spi_command(arduino_cmd)
-                        print(f"🎮 아두이노 명령 전송: {arduino_cmd}")
-                    
-                    # 매크로 실행 (비동기)
-                    success = trigger_macro(file_key, macro_key)
-                    if not success:
-                        print(f"⚠️ 데모 매크로 '{file_key}:{macro_key}' 실행 실패")
-                        print(f"  → 매크로 파일 '{file_key}' 또는 매크로 이름 '{macro_key}' 확인 필요")
-                    else:
-                        # 매크로 실행 중 시나리오 일시정지 (내부적으로만 처리, 사용자 일시정지와 구분)
-                        if macro_duration > 0:
-                            # 매크로 실행 중 플래그 설정
-                            with self._macro_lock:
-                                self._macro_running = True
-                            
-                            # 매크로 실행 중에는 _pause_event를 clear하지 않음 (사용자 일시정지와 구분)
-                            print(f"⏸️ 매크로 실행 중: {step.get('description', '')} ({macro_duration:.1f}초)")
-                            
-                            # 매크로 실행 시간 동안 대기 (일시정지 감지)
-                            waited = 0.0
-                            chunk = 0.1  # 0.1초씩 체크
-                            while waited < macro_duration and not self._stop_event.is_set():
-                                # 사용자가 일시정지했는지 확인
-                                if self._paused:
-                                    print("⏸️ 사용자 일시정지 감지, 매크로 대기 중단")
-                                    # 일시정지 해제까지 대기
-                                    self._pause_event.wait()
-                                    if self._stop_event.is_set():
-                                        break
-                                    # 일시정지 해제 후에도 매크로 대기 중단 (차렷자세로 복귀했으므로)
-                                    break
-                                time.sleep(chunk)
-                                waited += chunk
-                            
-                            # 매크로 실행 완료
-                            with self._macro_lock:
-                                self._macro_running = False
-                            
-                            # 동작 간 텀 추가 (1.5초) - 일시정지 상태 체크
-                            if not self._paused and not self._stop_event.is_set():
-                                print(f"⏳ 동작 간 텀: 1.5초")
-                                waited = 0.0
-                                while waited < 1.5 and not self._stop_event.is_set():
-                                    if self._paused:
-                                        self._pause_event.wait()
-                                        if self._stop_event.is_set():
-                                            break
-                                        continue
-                                    chunk = min(0.1, 1.5 - waited)
-                                    time.sleep(chunk)
-                                    waited += chunk
-                            
-                            print(f"▶️ 매크로 완료")
-                except Exception as e:
-                    print(f"✗ 데모 매크로 '{file_key}:{macro_key}' 실행 중 예외 발생: {type(e).__name__}: {e}")
-            else:
-                print(f"⚠️ 데모 매크로 매핑 없음: '{macro_name}'")
-                print(f"  → DEMO_MACRO_MAP에 '{macro_name}' 키가 없습니다")
-
-
-demo_runner = DemoScenarioRunner()
-
+# ============================================================================
+# 유틸리티 함수
+# ============================================================================
 
 def _is_raspberry_pi() -> bool:
-    """라즈베리파이에서 실행 중인지 확인"""
-    # I2C_MODE가 auto이고 Linux 환경이면 라즈베리파이로 간주
+    """라즈베리파이에서 실행 중인지 확인합니다."""
     if I2C_MODE == "auto" and platform.system() == "Linux":
-        # 추가 확인: /proc/cpuinfo에 Raspberry Pi 정보가 있는지 확인
         try:
             with open("/proc/cpuinfo", "r") as f:
                 cpuinfo = f.read()
                 if "Raspberry Pi" in cpuinfo or "BCM" in cpuinfo:
                     return True
-        except:
+        except Exception:
             pass
     return False
 
 
 def _send_spi_command(command: str) -> None:
-    """아두이노로 SPI 명령 전송"""
+    """아두이노로 SPI 명령을 전송합니다."""
     if not SPI_AVAILABLE or spi is None:
         return
     
@@ -555,60 +313,373 @@ def _send_spi_command(command: str) -> None:
         print(f"⚠️ SPI 전송 실패: {e}")
 
 
-# 매크로 이름을 아두이노 SPI 명령어로 매핑
-ARDUINO_COMMAND_MAP = {
-    "김지찬 응원가": "KIM_JICHAN",
-    "홈런": "HOMERUN",
-    "김도영 응원가가": "KIM_DOYOUNG",
-    "김도영 응원가": "KIM_DOYOUNG",  # 별칭
-    "아웃(삐끼삐끼)": "KIAOUT",
-}
-
-
 def _play_mp3_on_raspberry(mp3_filename: str) -> None:
-    """라즈베리파이에서 MP3 파일을 재생합니다"""
-    is_rpi = _is_raspberry_pi()
+    """라즈베리파이에서 MP3 파일을 재생합니다."""
+    mp3_path = f"/home/raspberry/{mp3_filename}"
     
-    if is_rpi:
-        # 라즈베리파이에서 직접 재생
-        mp3_path = f"/home/raspberry/{mp3_filename}"
+    if not os.path.exists(mp3_path):
+        print(f"⚠️ MP3 파일 없음: {mp3_path}")
+        return
+    
+    try:
+        # 기존 재생 중인 mpg123 프로세스 종료
+        subprocess.call(["pkill", "-f", "mpg123"], stderr=subprocess.DEVNULL)
         
-        if not os.path.exists(mp3_path):
-            print(f"⚠️ MP3 파일 없음: {mp3_path}")
-            return
+        # MP3 재생 시작 (비동기)
+        print(f"🎧 MP3 재생 시작: {mp3_filename}")
+        process = subprocess.Popen(
+            ["mpg123", "-a", "hw:0,0", mp3_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
         
-        try:
-            # 기존 재생 중인 mpg123 프로세스 종료
-            subprocess.call(["pkill", "-f", "mpg123"], stderr=subprocess.DEVNULL)
+        # 프로세스가 정상적으로 시작되었는지 확인
+        if process.poll() is None:
+            # 프로세스가 실행 중이면 성공
+            print(f"✓ MP3 재생 프로세스 시작됨: PID {process.pid}")
+        else:
+            print(f"⚠️ MP3 재생 프로세스가 즉시 종료됨: {mp3_filename}")
             
-            # MP3 재생 (비동기)
-            print(f"🎧 MP3 재생 시작: {mp3_filename}")
-            subprocess.Popen(
-                ["mpg123", "-a", "hw:0,0", mp3_path],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-        except Exception as e:
-            print(f"⚠️ MP3 재생 실패: {e} (파일: {mp3_filename})")
-    elif RASPBERRY_PI_IP:
-        # PC에서 라즈베리파이로 HTTP 요청
-        try:
-            import requests
-            url = f"http://{RASPBERRY_PI_IP}:{RASPBERRY_PI_MP3_PORT}/play"
-            response = requests.post(url, json={"filename": mp3_filename}, timeout=2)
-            if response.status_code == 200:
-                print(f"🎵 MP3 재생 요청 전송: {mp3_filename}")
-            else:
-                print(f"⚠️ MP3 재생 요청 실패 ({response.status_code}): {mp3_filename}")
-        except ImportError:
-            print(f"⚠️ requests 모듈이 없어 MP3 재생을 건너뜁니다: {mp3_filename}")
-        except Exception as e:
-            print(f"⚠️ MP3 재생 요청 중 오류: {e} (파일: {mp3_filename})")
-    else:
-        print(f"⚠️ 라즈베리파이 환경이 아니고 IP도 설정되지 않아 MP3 재생을 건너뜁니다: {mp3_filename}")
+    except FileNotFoundError:
+        print(f"⚠️ mpg123 명령을 찾을 수 없습니다. 설치가 필요합니다: sudo apt-get install mpg123")
+    except Exception as e:
+        print(f"⚠️ MP3 재생 실패: {e} (파일: {mp3_filename})")
 
+
+def _get_mp3_delay(macro_name: str) -> float:
+    """매크로 이름에 따른 MP3 재생 후 딜레이를 반환합니다."""
+    return MP3_DELAY_MAP.get(macro_name, DEFAULT_MP3_DELAY)
+
+
+def _wait_with_pause_check(duration: float, stop_event: threading.Event, pause_event: threading.Event, paused: bool) -> None:
+    """일시정지 및 정지 이벤트를 체크하면서 대기합니다."""
+    waited = 0.0
+    chunk = 0.1
+    while waited < duration and not stop_event.is_set():
+        if paused:
+            pause_event.wait()
+            if stop_event.is_set():
+                break
+            continue
+        time.sleep(chunk)
+        waited += chunk
+
+# ============================================================================
+# 데모 시나리오 실행기
+# ============================================================================
+
+class DemoScenarioRunner:
+    """데모 시나리오를 실행하는 클래스"""
+    
+    def __init__(self) -> None:
+        self._thread: Optional[threading.Thread] = None
+        self._running = False
+        self._paused = False
+        self._stop_event = threading.Event()
+        self._pause_event = threading.Event()
+        self._pause_event.set()
+        self.current_step: Optional[str] = None
+        self._step_index = 0
+        self._macro_running = False
+        self._macro_lock = threading.Lock()
+
+    @property
+    def is_running(self) -> bool:
+        return self._running
+
+    @property
+    def is_paused(self) -> bool:
+        return self._paused
+
+    def start(self) -> bool:
+        """데모 시나리오를 시작합니다."""
+        if self._running:
+            return False
+        self._stop_event.clear()
+        self._pause_event.set()
+        self._paused = False
+        self._step_index = 0
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        self._running = True
+        return True
+
+    def pause(self) -> bool:
+        """데모 시나리오를 일시정지합니다."""
+        if not self._running or self._paused:
+            return False
+        self._paused = True
+        self._pause_event.clear()
+        
+        with self._macro_lock:
+            if self._macro_running:
+                print("⏸️ 데모 일시정지: 매크로 실행 중이므로 차렷자세로 복귀")
+                _send_spi_command("STOP")
+                file_key, macro_key = DEMO_MACRO_MAP.get("차렷자세", (None, None))
+                if file_key and macro_key:
+                    trigger_macro(file_key, macro_key)
+                    print("✓ 차렷자세로 복귀")
+        
+        return True
+
+    def resume(self) -> bool:
+        """데모 시나리오를 재개합니다."""
+        if not self._running or not self._paused:
+            return False
+        self._paused = False
+        self._pause_event.set()
+        return True
+
+    def stop(self) -> None:
+        """데모 시나리오를 정지합니다."""
+        if not self._running:
+            return
+        self._stop_event.set()
+        self._pause_event.set()
+        if self._thread:
+            self._thread.join(timeout=1)
+
+    def _run(self) -> None:
+        """데모 시나리오 실행 메인 루프"""
+        global game_state
+        try:
+            with lock:
+                game_state = _initial_game_state()
+                game_state["teams"]["home"]["name"] = "기아"
+                game_state["teams"]["away"]["name"] = "삼성"
+            
+            for idx, step in enumerate(DEMO_SCENARIO_STEPS):
+                if self._stop_event.is_set():
+                    break
+                
+                self._step_index = idx
+                self.current_step = step.get("description")
+                
+                # 일시정지 대기
+                self._pause_event.wait()
+                if self._stop_event.is_set():
+                    break
+                
+                # 딜레이 처리
+                delay = float(step.get("delay", 0))
+                if delay > 0:
+                    _wait_with_pause_check(delay, self._stop_event, self._pause_event, self._paused)
+                
+                if self._stop_event.is_set():
+                    break
+                
+                # 일시정지 대기
+                self._pause_event.wait()
+                if self._stop_event.is_set():
+                    break
+                
+                self._apply_step(step)
+            
+            self.current_step = None
+            self._step_index = 0
+        finally:
+            self._running = False
+            self._paused = False
+            self._stop_event.clear()
+            self._pause_event.set()
+
+    def _apply_step(self, step: Dict[str, Any]) -> None:
+        """시나리오 스텝을 적용합니다."""
+        self._update_game_state(step)
+        self._execute_macro(step)
+
+    def _update_game_state(self, step: Dict[str, Any]) -> None:
+        """게임 상태를 업데이트합니다."""
+        global game_state
+        with lock:
+            state = game_state
+            teams = state["teams"]
+
+            # 팀 이름 설정
+            if "set_teams" in step:
+                for side, name in step["set_teams"].items():
+                    if side in teams:
+                        teams[side]["name"] = name
+
+            # 점수 설정
+            if "set_scores" in step:
+                for side, value in step["set_scores"].items():
+                    if side in teams:
+                        teams[side]["runs"] = max(0, int(value))
+
+            # 안타 설정
+            if "set_hits" in step:
+                for side, value in step["set_hits"].items():
+                    if side in teams:
+                        teams[side]["hits"] = max(0, int(value))
+
+            # 에러 설정
+            if "set_errors" in step:
+                for side, value in step["set_errors"].items():
+                    if side in teams:
+                        teams[side]["errors"] = max(0, int(value))
+
+            # 점수 변화
+            if "score_delta" in step:
+                for side, delta in step["score_delta"].items():
+                    if side in teams:
+                        teams[side]["runs"] = max(0, teams[side]["runs"] + int(delta))
+
+            # 안타 변화
+            if "hits_delta" in step:
+                for side, delta in step["hits_delta"].items():
+                    if side in teams:
+                        teams[side]["hits"] = max(0, teams[side]["hits"] + int(delta))
+
+            # 에러 변화
+            if "errors_delta" in step:
+                for side, delta in step["errors_delta"].items():
+                    if side in teams:
+                        teams[side]["errors"] = max(0, teams[side]["errors"] + int(delta))
+
+            # 이닝, 하프 설정
+            if "inning" in step:
+                state["inning"] = int(step["inning"])
+            if "half" in step:
+                state["half"] = step["half"]
+
+            # 카운트, 베이스, 주자 설정
+            if "count" in step:
+                state["count"].update(step["count"])
+            if "bases" in step:
+                state["bases"].update(step["bases"])
+            if "runners" in step:
+                if "runners" not in state:
+                    state["runners"] = {"first": "", "second": "", "third": ""}
+                state["runners"].update(step["runners"])
+
+            # 타자, 수비수 설정
+            if "batter" in step:
+                if "batter" not in state:
+                    state["batter"] = {"name": "", "active": False}
+                state["batter"].update(step["batter"])
+            if "fielders" in step:
+                state["fielders"].update(step["fielders"])
+
+            # 경기 이벤트 업데이트 (UI 표시용)
+            event_type = step.get("event_type", "live")
+            if event_type in GAME_RELATED_EVENTS:
+                popup_desc = step.get("popup_description")
+                state["last_event"] = {
+                    "type": event_type,
+                    "description": step.get("description", ""),
+                    "popup_description": popup_desc if popup_desc is not None else None,
+                }
+
+    def _execute_macro(self, step: Dict[str, Any]) -> None:
+        """매크로를 실행합니다."""
+        macro_name = step.get("macro")
+        if not macro_name:
+            return
+
+        file_key, macro_key = DEMO_MACRO_MAP.get(macro_name, (None, None))
+        if not file_key or not macro_key:
+            print(f"⚠️ 데모 매크로 매핑 없음: '{macro_name}'")
+            print(f"  → DEMO_MACRO_MAP에 '{macro_name}' 키가 없습니다")
+            return
+
+        try:
+            macro_duration = calculate_macro_duration(file_key, macro_key)
+            
+            # 아두이노 SPI 명령 전송 (바퀴 움직임)
+            arduino_cmd = ARDUINO_COMMAND_MAP.get(macro_name)
+            if arduino_cmd:
+                _send_spi_command(arduino_cmd)
+                print(f"🎮 아두이노 명령 전송: {arduino_cmd}")
+            
+            # MP3 파일 확인
+            mp3_file = MP3_MAP.get(macro_name)
+            
+            # 매크로와 MP3를 동시에 시작
+            # 매크로 실행 (팔 동작) - 비동기로 실행
+            success = trigger_macro(file_key, macro_key)
+            
+            # MP3 재생 (매크로와 동시에 시작)
+            if mp3_file:
+                _play_mp3_on_raspberry(mp3_file)
+            
+            # MP3와 동작 싱크를 맞추기 위한 딜레이 (필요한 경우)
+            if mp3_file:
+                delay = _get_mp3_delay(macro_name)
+                if delay > 0:
+                    print(f"⏳ {macro_name} 싱크 조정: {delay}초 대기")
+                    time.sleep(delay)
+            if not success:
+                print(f"⚠️ 데모 매크로 '{file_key}:{macro_key}' 실행 실패")
+                print(f"  → 매크로 파일 '{file_key}' 또는 매크로 이름 '{macro_key}' 확인 필요")
+                return
+
+            # 매크로 실행 시간 동안 대기
+            if macro_duration > 0:
+                with self._macro_lock:
+                    self._macro_running = True
+                
+                print(f"⏸️ 매크로 실행 중: {step.get('description', '')} ({macro_duration:.1f}초)")
+                
+                _wait_with_pause_check(
+                    macro_duration,
+                    self._stop_event,
+                    self._pause_event,
+                    self._paused
+                )
+                
+                with self._macro_lock:
+                    self._macro_running = False
+            else:
+                # 매크로 duration이 0이어도 차렷자세는 정렬 시간 필요
+                if macro_name == "차렷자세":
+                    print(f"⏸️ 차렷자세 매크로 실행 중 (정렬 대기)")
+                    with self._macro_lock:
+                        self._macro_running = True
+                    # 차렷자세 최소 대기 시간
+                    _wait_with_pause_check(
+                        3.0,  # 차렷자세 정렬을 위한 최소 대기 시간
+                        self._stop_event,
+                        self._pause_event,
+                        self._paused
+                    )
+                    with self._macro_lock:
+                        self._macro_running = False
+            
+            # 차렷자세 매크로는 정렬을 위해 추가 대기 시간 필요
+            if macro_name == "차렷자세":
+                alignment_wait = 3.0  # 차렷자세 정렬 완료 대기 (2초 → 3초로 증가)
+                print(f"⏳ 차렷자세 정렬 대기: {alignment_wait}초")
+                _wait_with_pause_check(
+                    alignment_wait,
+                    self._stop_event,
+                    self._pause_event,
+                    self._paused
+                )
+                
+                # 동작 간 텀
+                if not self._paused and not self._stop_event.is_set():
+                    print(f"⏳ 동작 간 텀: {MACRO_INTERVAL}초")
+                    _wait_with_pause_check(
+                        MACRO_INTERVAL,
+                        self._stop_event,
+                        self._pause_event,
+                        self._paused
+                    )
+                
+                print(f"▶️ 매크로 완료")
+        except Exception as e:
+            print(f"✗ 데모 매크로 '{file_key}:{macro_key}' 실행 중 예외 발생: {type(e).__name__}: {e}")
+
+
+demo_runner = DemoScenarioRunner()
+
+# ============================================================================
+# 게임 이벤트 처리
+# ============================================================================
 
 def _advance_random_event(state: Dict[str, Any]) -> None:
+    """랜덤 이벤트를 생성하고 게임 상태를 업데이트합니다."""
     if state["count"]["outs"] >= 3:
         state["count"] = {"balls": 0, "strikes": 0, "outs": 0}
         state["bases"] = {"first": False, "second": False, "third": False}
@@ -697,6 +768,7 @@ def _advance_random_event(state: Dict[str, Any]) -> None:
 
 
 def _advance_runners(state: Dict[str, Any], bases_to_advance: int, batting: str) -> None:
+    """주자를 진루시킵니다."""
     bases = state["bases"]
 
     def score_run():
@@ -726,6 +798,9 @@ def _advance_runners(state: Dict[str, Any], bases_to_advance: int, batting: str)
             else:
                 bases[target] = True
 
+# ============================================================================
+# Flask 라우트
+# ============================================================================
 
 @game_bp.route("/")
 def index():
@@ -734,14 +809,15 @@ def index():
 
 @game_bp.route("/api/game-state")
 def api_game_state():
+    """게임 상태를 반환합니다."""
     global game_state
     should_advance = request.args.get("advance", "0") == "1"
     demo_active = demo_runner.is_running
-    # 데모가 실행 중이거나 일시정지 중이면 자동 진행 비활성화
+    
     with lock:
         if should_advance and not demo_active:
             _advance_random_event(game_state)
-        # 응답 복제
+        
         response = dict(game_state)
         response["teams"] = {k: dict(v) for k, v in game_state["teams"].items()}
         response["count"] = dict(game_state["count"])
@@ -750,11 +826,11 @@ def api_game_state():
         response["batter"] = dict(game_state.get("batter", {"name": "", "active": False}))
         response["fielders"] = {k: dict(v) for k, v in game_state.get("fielders", {}).items()}
         response["last_event"] = dict(game_state["last_event"]) if game_state.get("last_event") else None
+    
     response["demo_active"] = demo_active
     response["demo_paused"] = demo_runner.is_paused
     response["demo_step"] = demo_runner.current_step
 
-    # 락 밖에서 비동기 매크로 트리거 (락 홀드 시간 최소화)
     trigger_text = last_event_to_trigger_text(response.get("last_event"))
     if trigger_text and not demo_active:
         run_macro_by_event_text_async(trigger_text)
@@ -764,6 +840,7 @@ def api_game_state():
 
 @game_bp.route("/api/reset", methods=["POST"])
 def api_reset():
+    """게임 상태를 초기화합니다."""
     global game_state
     with lock:
         game_state = _initial_game_state()
@@ -772,6 +849,7 @@ def api_reset():
 
 @game_bp.route("/api/demo/start", methods=["POST"])
 def api_demo_start():
+    """데모 시나리오를 시작합니다."""
     if demo_runner.start():
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": "demo_running"}), 409
@@ -779,6 +857,7 @@ def api_demo_start():
 
 @game_bp.route("/api/demo/status")
 def api_demo_status():
+    """데모 시나리오 상태를 반환합니다."""
     return jsonify({
         "ok": True,
         "running": demo_runner.is_running,
@@ -789,6 +868,7 @@ def api_demo_status():
 
 @game_bp.route("/api/demo/pause", methods=["POST"])
 def api_demo_pause():
+    """데모 시나리오를 일시정지합니다."""
     if demo_runner.pause():
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": "demo_not_running_or_already_paused"}), 400
@@ -796,6 +876,7 @@ def api_demo_pause():
 
 @game_bp.route("/api/demo/resume", methods=["POST"])
 def api_demo_resume():
+    """데모 시나리오를 재개합니다."""
     if demo_runner.resume():
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": "demo_not_running_or_not_paused"}), 400
@@ -803,9 +884,9 @@ def api_demo_resume():
 
 @game_bp.route("/api/demo/restart", methods=["POST"])
 def api_demo_restart():
-    """데모를 처음부터 다시 시작합니다"""
+    """데모 시나리오를 처음부터 다시 시작합니다."""
     demo_runner.stop()
-    time.sleep(0.5)  # 정지 완료 대기
+    time.sleep(0.5)
     if demo_runner.start():
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": "demo_start_failed"}), 500
@@ -815,5 +896,3 @@ def api_demo_restart():
 def api_config():
     """클라이언트에서 사용할 설정값을 반환합니다."""
     return jsonify({"ok": True, "gameId": BASEBALL_ID or ""})
-
-

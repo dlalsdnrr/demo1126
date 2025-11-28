@@ -314,7 +314,7 @@ class Characteristic(dbus.service.Object):
 
 
 
-        elif key.startswith("KIAOUT"):
+        elif key.startswith("OUT"):
             play_specific_mp3("biggibiggi.mp3")
             time.sleep(1.0)
             execute_macro("biggibiggi")
