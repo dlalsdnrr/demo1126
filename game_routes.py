@@ -447,6 +447,10 @@ class DemoScenarioRunner:
                     # MP3 재생 (매크로 시작 전에 재생 시작)
                     mp3_file = MP3_MAP.get(macro_name)
                     if mp3_file:
+                        # 김지찬 응원가만 2초 딜레이 추가
+                        if macro_name == "김지찬 응원가":
+                            print("⏳ 김지찬 응원가 MP3 재생 2초 딜레이...")
+                            time.sleep(2.0)
                         _play_mp3_on_raspberry(mp3_file)
                         # MP3 재생 시작 후 약간의 딜레이 (MP3와 동작 싱크 맞추기)
                         time.sleep(0.3)
