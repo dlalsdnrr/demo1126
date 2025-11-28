@@ -18,12 +18,12 @@ BASEBALL_ID = os.getenv("BASEBALL_ID", "")
 GAME_MODE = (os.getenv("GAME_MODE") or "auto").lower()
 SCRIPT_ID = (os.getenv("SCRIPT_ID") or "kia_samsung_demo").strip()
 MOTOR_ID_MAP: Dict[str, int] = {
-    "R1": int(os.getenv("MOTOR_ID_R1", "25")),
-    "R2": int(os.getenv("MOTOR_ID_R2", "50")),
-    "RE": int(os.getenv("MOTOR_ID_RE", "75")),
-    "L1": int(os.getenv("MOTOR_ID_L1", "100")),
-    "L2": int(os.getenv("MOTOR_ID_L2", "125")),
-    "LE": int(os.getenv("MOTOR_ID_LE", "150")),
+    "R1": int(os.getenv("MOTOR_ID_R1", "100")),
+    "R2": int(os.getenv("MOTOR_ID_R2", "125")),
+    "RE": int(os.getenv("MOTOR_ID_RE", "150")),
+    "L1": int(os.getenv("MOTOR_ID_L1", "25")),
+    "L2": int(os.getenv("MOTOR_ID_L2", "50")),
+    "LE": int(os.getenv("MOTOR_ID_LE", "75")),
 }
 
 # 음성 인식 설정
@@ -46,5 +46,9 @@ I2C_MODE = os.getenv("I2C_MODE", "auto").lower()   # auto: 라즈베리파이에
 BLE_ADAPTER_ADDR = os.getenv("BLE_ADAPTER_ADDR", "2C:CF:67:E9:50:B5")
 BLE_SERVICE_UUID = os.getenv("BLE_SERVICE_UUID", "12345678-1234-5678-1234-56789abcdef0")
 BLE_CHAR_UUID = os.getenv("BLE_CHAR_UUID", "abcdef01-1234-5678-1234-56789abcdef0")
+
+# 라즈베리파이 MP3 재생 설정
+RASPBERRY_PI_IP = os.getenv("RASPBERRY_PI_IP", "")  # 예: "192.168.1.100"
+RASPBERRY_PI_MP3_PORT = int(os.getenv("RASPBERRY_PI_MP3_PORT", "8080"))
 
 

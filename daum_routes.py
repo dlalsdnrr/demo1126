@@ -98,9 +98,18 @@ def api_daum_state():
     mapped = _map_daum_to_ui(doc)
 
     # 라이브 텍스트/상태로부터 이벤트 추출하여 매크로 트리거
-    trigger_text = last_event_to_trigger_text(mapped.get("last_event"))
-    if trigger_text:
-        run_macro_by_event_text_async(trigger_text)
+    # 데모가 실행 중이거나 일시정지 중이면 매크로 트리거하지 않음 (순환 import 방지를 위해 함수 내부에서 import)
+    try:
+        from game_routes import demo_runner
+        if not demo_runner.is_running:
+            trigger_text = last_event_to_trigger_text(mapped.get("last_event"))
+            if trigger_text:
+                run_macro_by_event_text_async(trigger_text)
+    except ImportError:
+        # game_routes가 아직 로드되지 않은 경우 (초기화 순서 문제)
+        trigger_text = last_event_to_trigger_text(mapped.get("last_event"))
+        if trigger_text:
+            run_macro_by_event_text_async(trigger_text)
 
     return jsonify(mapped)
 

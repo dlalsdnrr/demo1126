@@ -328,6 +328,14 @@
                 addConvoMessage(data.reply_text, 'ai');
             }
             
+            // 팝업 표시 (안녕/하이파이브/파이팅)
+            if (data.popup_text) {
+                // main.js의 showPopup 함수 사용
+                if (window.showPopup) {
+                    window.showPopup(data.popup_text, false);
+                }
+            }
+            
             // 오디오 재생
             if (data.audio_base64) {
                 await playAudioResponse(data.audio_base64);
