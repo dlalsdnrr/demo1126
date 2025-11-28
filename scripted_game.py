@@ -310,13 +310,25 @@ def _kia_vs_samsung_steps() -> List[ScriptStep]:
         )
     )
 
+    def kim_doyoung_return_to_attention(_state: State) -> None:
+        _trigger_macro("차렷자세")
+
+    steps.append(
+        ScriptStep(
+            at=70.0,  # 김도영 응원가 완료 후 차렷 자세로 복귀 (약 34초 응원가 + 여유시간)
+            type="info",
+            description="차렷 자세로 복귀",
+            apply=kim_doyoung_return_to_attention,
+        )
+    )
+
     def kim_doyoung_pitch_mix(state: State) -> None:
         _reset_count(state)
         state["count"]["balls"] = 1
 
     steps.append(
         ScriptStep(
-            at=40.0,
+            at=73.0,  # 차렷 자세 후 약간의 여유
             type="ball",
             description="김도영, 낮게 떨어지는 초구를 지켜보며 볼을 고릅니다",
             apply=kim_doyoung_pitch_mix,
@@ -328,7 +340,7 @@ def _kia_vs_samsung_steps() -> List[ScriptStep]:
 
     steps.append(
         ScriptStep(
-            at=42.0,
+            at=75.0,
             type="strike",
             description="김도영, 두 번째 공에는 방망이를 내며 스트라이크를 허용합니다",
             apply=kim_doyoung_equal,
@@ -344,7 +356,7 @@ def _kia_vs_samsung_steps() -> List[ScriptStep]:
 
     steps.append(
         ScriptStep(
-            at=46.0,
+            at=79.0,  # 차렷 자세 후 홈런 이벤트
             type="hr",
             description="김도영, 좌월 솔로 홈런! 동점을 만들며 분위기를 바꿉니다",
             apply=kim_doyoung_hr,
@@ -358,7 +370,7 @@ def _kia_vs_samsung_steps() -> List[ScriptStep]:
 
     steps.append(
         ScriptStep(
-            at=50.0,
+            at=83.0,  # 홈런 후 시간 조정
             type="single",
             description="최형우, 침착한 중전 안타로 다시 주자를 내보냅니다",
             apply=choi_hyoungwoo_single,
@@ -371,7 +383,7 @@ def _kia_vs_samsung_steps() -> List[ScriptStep]:
 
     steps.append(
         ScriptStep(
-            at=57.0,
+            at=90.0,  # 홈런 후 시간 조정
             type="bunt",
             description="박찬호, 정교한 스퀴즈 번트로 3루 주자를 압박합니다",
             apply=park_chanho_bunt,
@@ -385,7 +397,7 @@ def _kia_vs_samsung_steps() -> List[ScriptStep]:
 
     steps.append(
         ScriptStep(
-            at=65.0,
+            at=98.0,  # 홈런 후 시간 조정
             type="sac_fly",
             description="소크라테스, 우중간 희생플라이로 KIA가 앞서갑니다",
             apply=socrates_sac_fly,
@@ -399,7 +411,7 @@ def _kia_vs_samsung_steps() -> List[ScriptStep]:
 
     steps.append(
         ScriptStep(
-            at=73.0,
+            at=106.0,  # 홈런 후 시간 조정
             type="strikeout",
             description="박동원, 루킹 삼진으로 이닝이 마무리됩니다",
             apply=inning_close,
@@ -414,7 +426,7 @@ def _kia_vs_samsung_steps() -> List[ScriptStep]:
 
     steps.append(
         ScriptStep(
-            at=83.0,
+            at=116.0,  # 홈런 후 시간 조정
             type="final",
             description="KIA 2:1 승리",
             apply=kia_victory,
@@ -423,7 +435,7 @@ def _kia_vs_samsung_steps() -> List[ScriptStep]:
 
     steps.append(
         ScriptStep(
-            at=88.0,
+            at=121.0,  # 홈런 후 시간 조정
             type="end",
             description="경기 종료",
             apply=stage_reset,

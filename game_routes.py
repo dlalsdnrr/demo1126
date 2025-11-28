@@ -448,8 +448,14 @@ class DemoScenarioRunner:
                     mp3_file = MP3_MAP.get(macro_name)
                     if mp3_file:
                         _play_mp3_on_raspberry(mp3_file)
-                        # MP3 재생 시작 후 약간의 딜레이 (MP3와 동작 싱크 맞추기)
-                        time.sleep(0.3)
+                        # MP3 재생 시작 후 딜레이 (MP3와 동작 싱크 맞추기)
+                        # 김도영 응원가의 경우 1.0초, 홈런의 경우 1.8초로 조정
+                        if macro_name == "김도영 응원가" or macro_name == "김도영 응원가가":
+                            time.sleep(1.0)  # 김도영 응원가 MP3와 동작 타이밍 맞추기
+                        elif macro_name == "홈런":
+                            time.sleep(1.8)  # 홈런 MP3와 동작 타이밍 맞추기
+                        else:
+                            time.sleep(0.3)  # 기타 매크로는 기본 딜레이
                     
                     # 아두이노로 SPI 명령 전송 (바퀴 움직임)
                     arduino_cmd = ARDUINO_COMMAND_MAP.get(macro_name)
