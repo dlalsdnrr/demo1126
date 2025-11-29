@@ -5,12 +5,10 @@ import threading
 import time
 import os
 import subprocess
-import platform
 from typing import Dict, Any, Optional
 
 from flask import Blueprint, jsonify, render_template, request
 from macros_executor import (
-    run_macro_by_event_text_async,
     last_event_to_trigger_text,
     trigger_macro,
     calculate_macro_duration,
@@ -29,6 +27,13 @@ DEMO_MACRO_MAP = {
     "김도영 응원가": ("김도영 응원가", "김도영 응원가"),
     "홈런": ("홈런", "홈런"),
     "최강기아": ("외쳐라 최강기아", "최강기아"),
+}
+
+# 이벤트 텍스트를 매크로 이름으로 매핑 (각 JSON 파일만 사용)
+EVENT_TO_MACRO_MAP = {
+    "홈런": "홈런",
+    "아웃": "아웃(삐끼삐끼)",
+    "삼진아웃": "아웃(삐끼삐끼)",
 }
 
 # MP3 파일 매핑
@@ -52,6 +57,7 @@ ARDUINO_COMMAND_MAP = {
 # MP3 재생 전 딜레이 설정 (초 단위) - 동작과 소리 싱크 맞추기
 MP3_PRE_DELAY_MAP = {
     # 최강기아는 딜레이 없이 잘 맞으므로 김지찬도 동일하게 설정
+    "김지찬 응원가": 2.0,  # 동작을 2초 먼저 시작하여 MP3와 싱크 맞춤
 }
 
 # MP3 재생 후 딜레이 설정 (초 단위)
@@ -71,8 +77,8 @@ GAME_RELATED_EVENTS = {
     "out", "sac_fly", "walk", "error", "change", "end", "ball", "strike"
 }
 
-# 매크로 실행 후 동작 간 텀 (초)
-MACRO_INTERVAL = 1.5
+# 차렷자세 정렬 대기 시간 (초)
+ATTENTION_POSE_ALIGNMENT_TIME = 3.0
 
 # ============================================================================
 # SPI 통신 초기화
@@ -81,17 +87,15 @@ MACRO_INTERVAL = 1.5
 SPI_AVAILABLE = False
 spi = None
 try:
-    if platform.system() == "Linux":
-        try:
-            import spidev  # type: ignore
-            spi = spidev.SpiDev()
-            spi.open(0, 0)
-            spi.max_speed_hz = 500000
-            SPI_AVAILABLE = True
-            print("✓ SPI 통신 초기화 완료")
-        except ImportError:
-            print("⚠️ spidev 모듈이 설치되지 않았습니다 (라즈베리파이에서만 필요)")
-            SPI_AVAILABLE = False
+    import spidev  # type: ignore
+    spi = spidev.SpiDev()
+    spi.open(0, 0)
+    spi.max_speed_hz = 500000
+    SPI_AVAILABLE = True
+    print("✓ SPI 통신 초기화 완료")
+except ImportError:
+    print("⚠️ spidev 모듈이 설치되지 않았습니다")
+    SPI_AVAILABLE = False
 except Exception as e:
     print(f"⚠️ SPI 통신 초기화 실패: {e}")
     SPI_AVAILABLE = False
@@ -289,7 +293,7 @@ DEMO_SCENARIO_STEPS = [
 
 def _is_raspberry_pi() -> bool:
     """라즈베리파이에서 실행 중인지 확인합니다."""
-    if I2C_MODE == "auto" and platform.system() == "Linux":
+    if I2C_MODE == "auto":
         try:
             with open("/proc/cpuinfo", "r") as f:
                 cpuinfo = f.read()
@@ -349,6 +353,11 @@ def _play_mp3_on_raspberry(mp3_filename: str) -> None:
 def _get_mp3_delay(macro_name: str) -> float:
     """매크로 이름에 따른 MP3 재생 후 딜레이를 반환합니다."""
     return MP3_DELAY_MAP.get(macro_name, DEFAULT_MP3_DELAY)
+
+
+def _get_mp3_pre_delay(macro_name: str) -> float:
+    """매크로 이름에 따른 MP3 재생 전 딜레이를 반환합니다."""
+    return MP3_PRE_DELAY_MAP.get(macro_name, 0.0)
 
 
 def _wait_with_pause_check(duration: float, stop_event: threading.Event, pause_event: threading.Event, paused: bool) -> None:
@@ -584,92 +593,91 @@ class DemoScenarioRunner:
             return
 
         try:
+            # 매크로 정보 확인
             macro_duration = calculate_macro_duration(file_key, macro_key)
-            
-            # 아두이노 SPI 명령 전송 (바퀴 움직임)
             arduino_cmd = ARDUINO_COMMAND_MAP.get(macro_name)
+            mp3_file = MP3_MAP.get(macro_name)
+            is_attention_pose = (macro_name == "차렷자세")
+            
+            # 1. 아두이노 SPI 명령 전송 (바퀴 움직임)
             if arduino_cmd:
                 _send_spi_command(arduino_cmd)
                 print(f"🎮 아두이노 명령 전송: {arduino_cmd}")
             
-            # MP3 파일 확인
-            mp3_file = MP3_MAP.get(macro_name)
-            
-            # 매크로와 MP3를 동시에 시작
-            # 매크로 실행 (팔 동작) - 비동기로 실행
+            # 2. 매크로 실행 (팔 동작)
             success = trigger_macro(file_key, macro_key)
-            
-            # MP3 재생 (매크로와 동시에 시작)
-            if mp3_file:
-                _play_mp3_on_raspberry(mp3_file)
-            
-            # MP3와 동작 싱크를 맞추기 위한 딜레이 (필요한 경우)
-            if mp3_file:
-                delay = _get_mp3_delay(macro_name)
-                if delay > 0:
-                    print(f"⏳ {macro_name} 싱크 조정: {delay}초 대기")
-                    time.sleep(delay)
             if not success:
                 print(f"⚠️ 데모 매크로 '{file_key}:{macro_key}' 실행 실패")
                 print(f"  → 매크로 파일 '{file_key}' 또는 매크로 이름 '{macro_key}' 확인 필요")
                 return
-
-            # 매크로 실행 시간 동안 대기
-            if macro_duration > 0:
-                with self._macro_lock:
-                    self._macro_running = True
-                
-                print(f"⏸️ 매크로 실행 중: {step.get('description', '')} ({macro_duration:.1f}초)")
-                
-                _wait_with_pause_check(
-                    macro_duration,
-                    self._stop_event,
-                    self._pause_event,
-                    self._paused
-                )
-                
-                with self._macro_lock:
-                    self._macro_running = False
-            else:
-                # 매크로 duration이 0이어도 차렷자세는 정렬 시간 필요
-                if macro_name == "차렷자세":
-                    print(f"⏸️ 차렷자세 매크로 실행 중 (정렬 대기)")
-                    with self._macro_lock:
-                        self._macro_running = True
-                    # 차렷자세 최소 대기 시간
-                    _wait_with_pause_check(
-                        3.0,  # 차렷자세 정렬을 위한 최소 대기 시간
-                        self._stop_event,
-                        self._pause_event,
-                        self._paused
-                    )
-                    with self._macro_lock:
-                        self._macro_running = False
             
-            # 차렷자세 매크로는 정렬을 위해 추가 대기 시간 필요
-            if macro_name == "차렷자세":
-                alignment_wait = 3.0  # 차렷자세 정렬 완료 대기 (2초 → 3초로 증가)
-                print(f"⏳ 차렷자세 정렬 대기: {alignment_wait}초")
-                _wait_with_pause_check(
-                    alignment_wait,
-                    self._stop_event,
-                    self._pause_event,
-                    self._paused
-                )
-                
-                # 동작 간 텀
-                if not self._paused and not self._stop_event.is_set():
-                    print(f"⏳ 동작 간 텀: {MACRO_INTERVAL}초")
-                    _wait_with_pause_check(
-                        MACRO_INTERVAL,
-                        self._stop_event,
-                        self._pause_event,
-                        self._paused
-                    )
-                
-                print(f"▶️ 매크로 완료")
+            # 3. MP3 재생 처리 (SPI 명령이 없는 경우에만)
+            if not arduino_cmd and mp3_file:
+                self._handle_mp3_playback(macro_name, mp3_file)
+            elif arduino_cmd:
+                print(f"ℹ️ {macro_name}: SPI 명령으로 MP3 재생 처리됨 (ble_to_i2c_bridge)")
+            
+            # 4. 매크로 실행 시간 대기
+            self._wait_for_macro_completion(
+                macro_name,
+                macro_duration,
+                is_attention_pose,
+                step.get('description', '')
+            )
+            
+            print(f"▶️ 매크로 완료: {macro_name}")
+            
         except Exception as e:
             print(f"✗ 데모 매크로 '{file_key}:{macro_key}' 실행 중 예외 발생: {type(e).__name__}: {e}")
+    
+    def _handle_mp3_playback(self, macro_name: str, mp3_file: str) -> None:
+        """MP3 재생을 처리합니다."""
+        pre_delay = _get_mp3_pre_delay(macro_name)
+        
+        if pre_delay > 0:
+            print(f"⏳ {macro_name} 동작 먼저 시작: {pre_delay}초 후 MP3 재생")
+            time.sleep(pre_delay)
+        
+        _play_mp3_on_raspberry(mp3_file)
+        
+        post_delay = _get_mp3_delay(macro_name)
+        if post_delay > 0:
+            print(f"⏳ {macro_name} 싱크 조정: {post_delay}초 대기")
+            time.sleep(post_delay)
+    
+    def _wait_for_macro_completion(
+        self,
+        macro_name: str,
+        macro_duration: float,
+        is_attention_pose: bool,
+        description: str
+    ) -> None:
+        """매크로 실행 완료까지 대기합니다."""
+        with self._macro_lock:
+            self._macro_running = True
+        
+        # 차렷자세는 정렬 시간이 필요
+        if is_attention_pose:
+            wait_time = ATTENTION_POSE_ALIGNMENT_TIME
+            print(f"⏸️ 차렷자세 매크로 실행 중 (정렬 대기: {wait_time}초)")
+        elif macro_duration > 0:
+            wait_time = macro_duration
+            print(f"⏸️ 매크로 실행 중: {description} ({wait_time:.1f}초)")
+        else:
+            # duration이 0이면 대기하지 않음
+            with self._macro_lock:
+                self._macro_running = False
+            return
+        
+        _wait_with_pause_check(
+            wait_time,
+            self._stop_event,
+            self._pause_event,
+            self._paused
+        )
+        
+        with self._macro_lock:
+            self._macro_running = False
 
 
 demo_runner = DemoScenarioRunner()
@@ -833,7 +841,12 @@ def api_game_state():
 
     trigger_text = last_event_to_trigger_text(response.get("last_event"))
     if trigger_text and not demo_active:
-        run_macro_by_event_text_async(trigger_text)
+        # 이벤트 텍스트를 매크로 이름으로 변환 (각 JSON 파일만 사용)
+        macro_name = EVENT_TO_MACRO_MAP.get(trigger_text)
+        if macro_name:
+            file_key, macro_key = DEMO_MACRO_MAP.get(macro_name, (None, None))
+            if file_key and macro_key:
+                trigger_macro(file_key, macro_key)
 
     return jsonify(response)
 

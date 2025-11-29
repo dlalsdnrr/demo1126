@@ -48,23 +48,10 @@ def _find_serial_port():
     
     ports = list_ports.comports()
     
-    # Linux: ttyACM, ttyUSB 우선
+    # 라즈베리파이: ttyACM, ttyUSB 포트 검색
     for port in ports:
         port_name = port.device
         if 'ttyACM' in port_name or 'ttyUSB' in port_name:
-            try:
-                test_ser = pyserial.Serial(port_name, BAUDRATE, timeout=1)
-                test_ser.close()
-                _detected_port = port_name
-                print(f"✓ 자동 검색된 포트: {port_name}")
-                return port_name
-            except (pyserial.SerialException, OSError):
-                continue
-    
-    # Windows: COM 포트
-    for port in ports:
-        port_name = port.device
-        if port_name.startswith('COM'):
             try:
                 test_ser = pyserial.Serial(port_name, BAUDRATE, timeout=1)
                 test_ser.close()
